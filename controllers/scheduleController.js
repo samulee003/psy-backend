@@ -236,17 +236,19 @@ const getDoctorSchedule = (db) => (req, res) => {
           },
           schedules: schedules.map(schedule => {
             let definedSlotsArray = null;
-            if (schedule.defined_slots) {
+            // 只有當 defined_slots 是非空字串時才嘗試解析
+            if (schedule.defined_slots && typeof schedule.defined_slots === 'string') { 
               try {
                 definedSlotsArray = JSON.parse(schedule.defined_slots);
               } catch (e) {
                 console.error(`解析 schedule.defined_slots 失敗 (ID: ${schedule.id}):`, e.message);
+                // 解析失敗，保持 definedSlotsArray 為 null
               }
             }
             return {
               ...schedule,
               is_rest_day: Boolean(schedule.is_rest_day),
-              defined_slots: definedSlotsArray // 返回解析後的陣列或 null
+              defined_slots: definedSlotsArray 
             };
           })
         });
@@ -600,17 +602,19 @@ const getScheduleForMonthAndDoctor = (db) => (req, res) => {
         month,
         schedules: schedules.map(s => {
           let definedSlotsArray = null;
-          if (s.defined_slots) {
+          // 只有當 defined_slots 是非空字串時才嘗試解析
+          if (s.defined_slots && typeof s.defined_slots === 'string') { 
             try {
               definedSlotsArray = JSON.parse(s.defined_slots);
             } catch (e) {
               console.error(`解析 schedule.defined_slots 失敗 (ID: ${s.id}) for getScheduleForMonthAndDoctor:`, e.message);
+              // 解析失敗，保持 definedSlotsArray 為 null
             }
           }
           return {
             ...s, 
             is_rest_day: Boolean(s.is_rest_day),
-            defined_slots: definedSlotsArray // 返回解析後的陣列或 null
+            defined_slots: definedSlotsArray 
           };
         })
       });
