@@ -253,7 +253,7 @@ const getAvailableTimeSlots = (db) => (req, res) => {
         const appointmentQuery = `
           SELECT time_slot
           FROM appointments
-          WHERE doctor_id = ? AND appointment_date = ? AND status != 'cancelled'
+          WHERE doctor_id = ? AND date = ? AND status != 'cancelled'
         `;
 
         db.all(appointmentQuery, [doctorId, date], (err, bookedAppointments) => {
@@ -314,7 +314,7 @@ const deleteSchedule = (db) => (req, res) => {
       const appointmentQuery = `
         SELECT COUNT(*) as count
         FROM appointments
-        WHERE doctor_id = ? AND appointment_date = ? AND status != 'cancelled'
+        WHERE doctor_id = ? AND date = ? AND status != 'cancelled'
       `;
 
       db.get(appointmentQuery, [schedule.doctor_id, schedule.date], (err, result) => {
@@ -382,7 +382,7 @@ function handleAffectedAppointments(db, doctorId, date, isRestDay, startTime, en
   const query = `
     SELECT *
     FROM appointments
-    WHERE doctor_id = ? AND appointment_date = ? AND status != 'cancelled'
+    WHERE doctor_id = ? AND date = ? AND status != 'cancelled'
   `;
 
   db.all(query, [doctorId, date], (err, appointments) => {
@@ -399,7 +399,7 @@ function handleAffectedAppointments(db, doctorId, date, isRestDay, startTime, en
       const updateQuery = `
         UPDATE appointments
         SET status = 'cancelled', note = COALESCE(note, '') || ' (因醫生休息日自動取消)', updated_at = datetime('now')
-        WHERE doctor_id = ? AND appointment_date = ? AND status != 'cancelled'
+        WHERE doctor_id = ? AND date = ? AND status != 'cancelled'
       `;
 
       db.run(updateQuery, [doctorId, date], callback);
