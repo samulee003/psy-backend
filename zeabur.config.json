@@ -1,0 +1,19 @@
+{
+  "envs": {
+    "DB_PATH": "/data/database.sqlite", 
+    "PORT": "5000",
+    "NODE_ENV": "production",
+    "CORS_ORIGIN": "https://therapy-booking.zeabur.app"
+  },
+  "volumes": [
+    {
+      "name": "data",
+      "path": "/data"
+    }
+  ],
+  "start": "npm start",
+  "healthCheck": {
+    "path": "/api/health",
+    "port": 5000
+  }
+} 
