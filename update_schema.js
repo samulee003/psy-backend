@@ -43,25 +43,25 @@ const db = new sqlite3.Database(dbPath, sqlite3.OPEN_READWRITE, err => {
       }
 
       console.log('表結構信息:', rows);
-      const hasIsRestDay = rows.some(col => col.name === 'isRestDay');
+      const hasIsRestDay = rows.some(col => col.name === 'is_rest_day');
 
       if (hasIsRestDay) {
-        console.log('isRestDay 欄位已存在，無需修改');
+        console.log('is_rest_day 欄位已存在，無需修改');
         closeAndExit(0);
         return;
       }
 
-      console.log('正在添加 isRestDay 欄位...');
+      console.log('正在添加 is_rest_day 欄位...');
 
       // 添加欄位
-      db.run('ALTER TABLE schedule ADD COLUMN isRestDay INTEGER DEFAULT 0', function (err) {
+      db.run('ALTER TABLE schedule ADD COLUMN is_rest_day INTEGER DEFAULT 0', function (err) {
         if (err) {
           console.error('添加欄位失敗:', err.message);
           closeAndExit(1);
           return;
         }
 
-        console.log('已成功添加 isRestDay 欄位到 schedule 表');
+        console.log('已成功添加 is_rest_day 欄位到 schedule 表');
         console.log('受影響的行數:', this.changes);
 
         // 確認欄位已添加
