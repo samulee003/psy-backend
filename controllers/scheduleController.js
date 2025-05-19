@@ -485,10 +485,14 @@ function handleAffectedAppointments(db, doctorId, date, isRestDay, startTime, en
       return;
     }
 
+    // 初始化計數器
+    let processed = 0;
+    let cancelCount = 0;
+    const totalAppointments = appointments.length;
+    
     // 如果提供了 definedSlotsArray，則基於它來判斷
     if (definedSlotsArray && Array.isArray(definedSlotsArray) && definedSlotsArray.length > 0) {
       appointments.forEach(appointment => {
-        processed++;
         if (!definedSlotsArray.includes(appointment.time_slot)) {
           // 取消不在 definedSlotsArray 中的預約
           const updateQuery = `
@@ -497,17 +501,23 @@ function handleAffectedAppointments(db, doctorId, date, isRestDay, startTime, en
             WHERE id = ?
           `;
           db.run(updateQuery, [appointment.id], (err) => {
+            processed++;
             if (err) {
               console.error(`取消預約 ${appointment.id} (精確時段) 錯誤:`, err.message);
             } else {
               cancelCount++;
             }
-            if (processed === appointments.length) {
+            if (processed === totalAppointments) {
+              console.log(`總計處理 ${processed} 個預約，取消了 ${cancelCount} 個預約`);
               callback(null);
             }
           });
-        } else if (processed === appointments.length) {
-          callback(null);
+        } else {
+          processed++;
+          if (processed === totalAppointments) {
+            console.log(`總計處理 ${processed} 個預約，取消了 ${cancelCount} 個預約`);
+            callback(null);
+          }
         }
       });
     } else if (startTime && endTime) { // 否則，回退到使用 startTime 和 endTime
@@ -515,7 +525,6 @@ function handleAffectedAppointments(db, doctorId, date, isRestDay, startTime, en
       const endMinutes = timeToMinutes(endTime);
       
       appointments.forEach(appointment => {
-        processed++;
         const slotMinutes = timeToMinutes(appointment.time_slot);
         
         if (slotMinutes < startMinutes || slotMinutes >= endMinutes) {
@@ -526,22 +535,28 @@ function handleAffectedAppointments(db, doctorId, date, isRestDay, startTime, en
             WHERE id = ?
           `;
           db.run(updateQuery, [appointment.id], (err) => {
+            processed++;
             if (err) {
               console.error(`取消預約 ${appointment.id} 錯誤:`, err.message);
             } else {
               cancelCount++;
             }
-            if (processed === appointments.length) {
+            if (processed === totalAppointments) {
+              console.log(`總計處理 ${processed} 個預約，取消了 ${cancelCount} 個預約`);
               callback(null);
             }
           });
         } else {
           processed++;
-          if (processed === appointments.length) {
+          if (processed === totalAppointments) {
+            console.log(`總計處理 ${processed} 個預約，取消了 ${cancelCount} 個預約`);
             callback(null);
           }
         }
       });
+    } else {
+      // 如果沒有足夠信息判斷，簡單返回
+      callback(null);
     }
   });
 }
