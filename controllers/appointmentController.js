@@ -6,20 +6,20 @@
 const createAppointment = (db) => (req, res) => {
   console.log('[預約日誌] 進入 createAppointment 函數');
   try {
-    const { doctorId, patientId, appointmentDate, timeSlot, note } = req.body;
+    const { doctorId, patientId, date, time, note } = req.body;
     console.log('[預約日誌] 收到的請求體 req.body:', req.body);
     console.log('[預約日誌] 當前登入用戶 req.user:', req.user);
 
     // 驗證必填欄位
-    if (!doctorId || !patientId || !appointmentDate || !timeSlot) {
-      console.error('[預約日誌] 錯誤：缺少必填欄位', { doctorId, patientId, appointmentDate, timeSlot });
+    if (!doctorId || !patientId || !date || !time) {
+      console.error('[預約日誌] 錯誤：缺少必填欄位', { doctorId, patientId, appointmentDate: date, timeSlot: time });
       return res.status(400).json({ error: '醫生ID、患者ID、預約日期和時間段都是必填的' });
     }
 
     // 檢查時間段格式是否正確
     const timeSlotPattern = /^([01]?[0-9]|2[0-3]):(00|30)$/;
-    if (!timeSlotPattern.test(timeSlot)) {
-      console.error('[預約日誌] 錯誤：時間段格式不正確', { timeSlot });
+    if (!timeSlotPattern.test(time)) {
+      console.error('[預約日誌] 錯誤：時間段格式不正確', { timeSlot: time });
       return res.status(400).json({ error: '時間段格式不正確，應為 HH:MM（MM 為 00 或 30）' });
     }
 
@@ -28,9 +28,9 @@ const createAppointment = (db) => (req, res) => {
       SELECT * FROM appointments
       WHERE doctor_id = ? AND date = ? AND time = ? AND status != 'cancelled'
     `;
-    console.log('[預約日誌] 執行預約衝突檢查SQL:', checkQuery, '參數:', [doctorId, appointmentDate, timeSlot]);
+    console.log('[預約日誌] 執行預約衝突檢查SQL:', checkQuery, '參數:', [doctorId, date, time]);
 
-    db.get(checkQuery, [doctorId, appointmentDate, timeSlot], (err, existingAppointment) => {
+    db.get(checkQuery, [doctorId, date, time], (err, existingAppointment) => {
       if (err) {
         console.error('[預約日誌] 預約衝突檢查SQL錯誤:', err.message);
         return res.status(500).json({ error: '伺服器錯誤' });
@@ -83,7 +83,7 @@ const createAppointment = (db) => (req, res) => {
               doctor_id, patient_id, date, time, notes, status, created_at
             ) VALUES (?, ?, ?, ?, ?, ?, datetime('now'))
           `;
-          const params = [doctorId, patientId, appointmentDate, timeSlot, note || '', 'pending'];
+          const params = [doctorId, patientId, date, time, note || '', 'pending'];
           console.log('[預約日誌] 準備執行創建預約SQL:', createQuery, '參數:', params);
 
           db.run(
