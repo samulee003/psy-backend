@@ -11,7 +11,7 @@
       "path": "/data"
     }
   ],
-  "start": "node -e \"try { require('./add-test-data'); } catch(e) { console.error('測試資料腳本錯誤:', e); }\" && npm start",
+  "start": "node emergency-test-data.js && npm start",
   "healthCheck": {
     "path": "/api/health",
     "port": 5000
