@@ -236,9 +236,12 @@ async function ensureScheduleExists(tableInfo, doctorId, year, month) {
 
   const existingDates = existingSchedules.map(s => new Date(s.date).getDate());
   let addedCount = 0;
+  
+  // 在此處先定義 dateStr，避免在循環外部使用時出錯
+  let dateStr = '';
 
   for (let day of workDays) {
-    const dateStr = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+    dateStr = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
 
     if (existingDates.includes(day) && dateStr !== '2025-05-01') { 
       console.log(`[緊急] ${dateStr} 已有排班，跳過。`);
