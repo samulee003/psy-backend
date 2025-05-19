@@ -183,27 +183,24 @@ const deleteUser = (db) => (req, res) => {
 // 獲取醫生列表
 const getDoctors = (db) => (req, res) => {
   console.log('[DEBUG] Entered getDoctors function');
-  // const query = `
-  //   SELECT id, name, email, created_at, updated_at
-  //   FROM users
-  //   WHERE role = 'doctor'
-  //   ORDER BY name
-  // `;
-  const query = "SELECT 1 AS доходов;" // 簡化查詢以進行測試 (using a non-ASCII char to also test encoding, if any issue)
+  const query = `
+    SELECT id, name, email, created_at, updated_at
+    FROM users
+    WHERE role = 'doctor'
+    ORDER BY name
+  `;
 
-  console.log('[DEBUG] Executing SQL query in getDoctors (simplified):', query);
+  console.log('[DEBUG] Executing SQL query in getDoctors:', query);
 
   db.all(query, [], (err, doctors) => {
     console.log('[DEBUG] getDoctors - db.all callback entered'); 
     if (err) {
-      console.error('[ERROR] SQL error in getDoctors (simplified query):', err.message);
-      console.error('[ERROR] Failed Query in getDoctors (simplified query):', query);
-      return res.status(500).json({ error: '無法獲取醫生列表 (test query)' });
+      console.error('[ERROR] SQL error in getDoctors:', err.message);
+      console.error('[ERROR] Failed Query in getDoctors:', query);
+      return res.status(500).json({ error: '無法獲取醫生列表' });
     }
-    console.log('[DEBUG] getDoctors successful (simplified query), result:', doctors);
-    // For the test query, we don't expect a list of doctors, so we send back the raw result.
-    // In a real scenario, if this was the actual doctors query, we'd send { doctors } or an empty array.
-    res.json({ test_result: doctors }); 
+    console.log('[DEBUG] getDoctors successful, result count:', doctors ? doctors.length : 0);
+    res.json({ doctors: doctors || [] }); 
   });
 };
 
