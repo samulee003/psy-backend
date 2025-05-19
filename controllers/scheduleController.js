@@ -546,77 +546,83 @@ function handleAffectedAppointments(db, doctorId, date, isRestDay, startTime, en
   });
 }
 
-// 新增：獲取特定醫生在特定月份的排班
-const getScheduleForMonthAndDoctor = (db) => (req, res) => {
+// 獲取特定月份和醫生的排班，或特定月份所有醫生的排班 (供患者端使用)
+const getScheduleForMonthAndDoctor = (db) => (req, res, next) => {
   try {
     const { year, month } = req.params;
-    let { doctorId } = req.query; // 修改：允許 doctorId 未定義
+    const { doctorId } = req.query; // 從查詢參數獲取 doctorId
+    const userRole = req.user.role;
 
-    // 基本驗證
     if (!year || !month) {
-      return res.status(400).json({ error: '年份和月份是必填的' });
-    }
-    if (isNaN(parseInt(year)) || isNaN(parseInt(month))) {
-      return res.status(400).json({ error: '年份和月份必須是數字' });
+      return res.status(400).json({ error: '年份和月份都是必填的' });
     }
 
-    const startDate = `${year}-${String(month).padStart(2, '0')}-01`;
-    const endDate = new Date(year, month, 0).toISOString().split('T')[0];
+    const monthPadded = month.padStart(2, '0');
 
     let query = `
-      SELECT 
-        s.id, 
-        s.date, 
-        s.start_time, 
-        s.end_time, 
-        s.slot_duration, 
-        s.is_rest_day,
-        s.defined_slots, // 新增讀取 defined_slots
-        u.id as doctor_id,
-        u.name as doctor_name
-      FROM schedule s
-      JOIN users u ON s.doctor_id = u.id
-      WHERE s.date >= ? AND s.date <= ?
+        SELECT s.*, u.name as doctor_name 
+        FROM schedule s
+        LEFT JOIN users u ON s.doctor_id = u.id
+        WHERE strftime('%Y', s.date) = ? AND strftime('%m', s.date) = ?
     `;
-    const params = [startDate, endDate];
+    const queryParams = [year, monthPadded];
 
     if (doctorId) {
-      query += ` AND s.doctor_id = ?`;
-      params.push(parseInt(doctorId, 10)); // 確保是數字
-    } else if (req.user && req.user.role === 'doctor') {
-      query += ` AND s.doctor_id = ?`;
-      params.push(req.user.id);
+      query += ' AND s.doctor_id = ?';
+      queryParams.push(doctorId);
+      // For doctor, show all their schedules including rest days and empty slots
+    } else if (userRole === 'patient') {
+      // 患者只能看到可預約的醫生時段
+      query += ` 
+            AND s.doctor_id IN (SELECT id FROM users WHERE role = 'doctor')
+            AND (s.is_rest_day = 0 OR s.is_rest_day IS NULL) 
+            AND (
+                (s.defined_slots IS NOT NULL AND s.defined_slots != '[]' AND s.defined_slots != '') 
+                OR 
+                (s.start_time IS NOT NULL AND s.end_time IS NOT NULL AND s.start_time != '' AND s.end_time != '')
+            )
+        `;
     }
+    // If not a specific doctor and not a patient (e.g. admin), no further filtering on doctor_id (shows all schedules)
+    // Current logic: if doctorId is null and role is not patient, it shows all doctors' schedules without the patient-specific availability filters.
+    // This might need refinement if Admins should also see only 'available' slots by default or have a switch.
 
-    query += ` ORDER BY s.date ASC, s.start_time ASC`;
+    query += ' ORDER BY s.date, s.doctor_id, s.start_time;';
 
-    db.all(query, params, (err, schedules) => {
+    console.log('[DEBUG] Executing SQL query in getScheduleForMonthAndDoctor:', query);
+    console.log('[DEBUG] With parameters in getScheduleForMonthAndDoctor:', JSON.stringify(queryParams));
+
+    db.all(query, queryParams, (err, schedules) => {
       if (err) {
-        console.error(`查詢排班 (年份: ${year}, 月份: ${month}) 時發生錯誤:`, err.message);
-        return res.status(500).json({ error: '獲取排班資訊時發生內部錯誤' });
+        console.error(`查詢排班 (年份: ${year}, 月份: ${monthPadded}, DoctorID: ${doctorId || 'N/A'}, UserRole: ${userRole}) 時SQL語法錯誤: ${err.message}`);
+        console.error(`Failed Query in getScheduleForMonthAndDoctor: ${query}`);
+        console.error(`Failed Params in getScheduleForMonthAndDoctor: ${JSON.stringify(queryParams)}`);
+        return next(err); // 使用 next(err) 傳遞錯誤到 Express 錯誤處理中間件
       }
+
+      const processedSchedules = schedules.map(schedule => {
+        let definedSlotsArray = null;
+        // 只有當 defined_slots 是非空字串時才嘗試解析
+        if (schedule.defined_slots && typeof schedule.defined_slots === 'string') { 
+          try {
+            definedSlotsArray = JSON.parse(schedule.defined_slots);
+          } catch (e) {
+            console.error(`解析 schedule.defined_slots 失敗 (ID: ${schedule.id}) for getScheduleForMonthAndDoctor:`, e.message);
+            // 解析失敗，保持 definedSlotsArray 為 null
+          }
+        }
+        return {
+          ...schedule, 
+          is_rest_day: Boolean(schedule.is_rest_day),
+          defined_slots: definedSlotsArray 
+        };
+      });
 
       res.json({
         message: `成功獲取排班資訊`,
         year,
         month,
-        schedules: schedules.map(s => {
-          let definedSlotsArray = null;
-          // 只有當 defined_slots 是非空字串時才嘗試解析
-          if (s.defined_slots && typeof s.defined_slots === 'string') { 
-            try {
-              definedSlotsArray = JSON.parse(s.defined_slots);
-            } catch (e) {
-              console.error(`解析 schedule.defined_slots 失敗 (ID: ${s.id}) for getScheduleForMonthAndDoctor:`, e.message);
-              // 解析失敗，保持 definedSlotsArray 為 null
-            }
-          }
-          return {
-            ...s, 
-            is_rest_day: Boolean(s.is_rest_day),
-            defined_slots: definedSlotsArray 
-          };
-        })
+        schedules: processedSchedules
       });
     });
   } catch (error) {
