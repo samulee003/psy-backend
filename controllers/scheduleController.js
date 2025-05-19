@@ -574,145 +574,58 @@ const getScheduleForMonthAndDoctor = (db) => (req, res, next) => {
 
     const monthPadded = month.padStart(2, '0');
     
-    // 先檢查資料表結構
-    console.log(`[DEBUG] getScheduleForMonthAndDoctor - 檢查資料表結構`);
+    console.log(`[DEBUG] getScheduleForMonthAndDoctor - 查詢 ${year}-${monthPadded}`);
+
+    // 基本查詢，只查詢月份和年份
+    let query = `
+      SELECT s.*, u.name as doctor_name 
+      FROM schedule s
+      LEFT JOIN users u ON s.doctor_id = u.id
+      WHERE strftime('%Y', s.date) = ? AND strftime('%m', s.date) = ?
+    `;
+    const queryParams = [year, monthPadded];
+
+    // 如果指定了 doctorId，添加該條件
+    if (doctorId) {
+      query += ' AND s.doctor_id = ?';
+      queryParams.push(doctorId);
+    }
+
+    query += ' ORDER BY s.date, s.doctor_id';
     
-    // 檢查 users 表
-    db.all("PRAGMA table_info(users)", [], (err, userColumns) => {
+    console.log('[DEBUG] Executing SIMPLIFIED SQL query in getScheduleForMonthAndDoctor:', query);
+    console.log('[DEBUG] With parameters in getScheduleForMonthAndDoctor:', JSON.stringify(queryParams));
+
+    db.all(query, queryParams, (err, schedules) => {
       if (err) {
-        console.error(`[ERROR] 無法獲取用戶表結構:`, err.message);
-        return next(new Error('資料庫結構查詢錯誤'));
+        console.error(`簡化查詢排班時SQL語法錯誤: ${err.message}`);
+        return next(err);
       }
-      
-      // 檢查必要欄位
-      const hasRole = userColumns.some(c => c.name === 'role');
-      const hasName = userColumns.some(c => c.name === 'name');
-      
-      if (!hasRole) {
-        console.error('[ERROR] 用戶表缺少必要的 role 欄位');
-        return res.status(500).json({ error: '資料庫結構不兼容' });
-      }
-      
-      // 檢查 schedule 表
-      db.all("PRAGMA table_info(schedule)", [], (err, scheduleColumns) => {
-        if (err) {
-          console.error(`[ERROR] 無法獲取排班表結構:`, err.message);
-          return next(new Error('資料庫結構查詢錯誤'));
-        }
-        
-        console.log(`[DEBUG] getScheduleForMonthAndDoctor - Schedule 表欄位:`, scheduleColumns.map(c => c.name).join(', '));
-        
-        // 檢查必要欄位
-        const hasDate = scheduleColumns.some(c => c.name === 'date');
-        const hasDoctorId = scheduleColumns.some(c => c.name === 'doctor_id');
-        const hasIsRestDay = scheduleColumns.some(c => c.name === 'is_rest_day');
-        const hasDefinedSlots = scheduleColumns.some(c => c.name === 'defined_slots');
-        const hasStartTime = scheduleColumns.some(c => c.name === 'start_time');
-        const hasEndTime = scheduleColumns.some(c => c.name === 'end_time');
-        
-        if (!hasDate || !hasDoctorId) {
-          console.error('[ERROR] 排班表缺少必要的基本欄位 (date/doctor_id)');
-          return res.status(500).json({ error: '資料庫結構不兼容' });
-        }
-        
-        // 構建 SELECT 語句
-        const scheduleFields = ['s.id', 's.date', 's.doctor_id'];
-        if (hasStartTime) scheduleFields.push('s.start_time');
-        if (hasEndTime) scheduleFields.push('s.end_time');
-        if (hasIsRestDay) scheduleFields.push('s.is_rest_day');
-        if (hasDefinedSlots) scheduleFields.push('s.defined_slots');
-        
-        // user 表欄位
-        const userFields = [];
-        if (hasName) userFields.push('u.name as doctor_name');
-        
-        const selectFields = [...scheduleFields, ...userFields].join(', ');
-        
-        let query = `
-          SELECT ${selectFields}
-          FROM schedule s
-          LEFT JOIN users u ON s.doctor_id = u.id
-          WHERE strftime('%Y', s.date) = ? AND strftime('%m', s.date) = ?
-        `;
-        const queryParams = [year, monthPadded];
 
-        if (doctorId) {
-          query += ' AND s.doctor_id = ?';
-          queryParams.push(doctorId);
-        } else if (userRole === 'patient') {
-          // 患者只能看到可預約的醫生時段
-          query += ` AND s.doctor_id IN (SELECT id FROM users WHERE role = 'doctor')`;
-          
-          // 只有當這些欄位存在時，才添加相應的過濾條件
-          if (hasIsRestDay) {
-            query += ` AND (s.is_rest_day = 0 OR s.is_rest_day IS NULL)`;
-          }
-          
-          if (hasDefinedSlots && hasStartTime && hasEndTime) {
-            query += ` AND (
-              (s.defined_slots IS NOT NULL AND s.defined_slots != '[]' AND s.defined_slots != '') 
-              OR 
-              (s.start_time IS NOT NULL AND s.end_time IS NOT NULL AND s.start_time != '' AND s.end_time != '')
-            )`;
-          } else if (hasStartTime && hasEndTime) {
-            query += ` AND (s.start_time IS NOT NULL AND s.end_time IS NOT NULL AND s.start_time != '' AND s.end_time != '')`;
-          } else if (hasDefinedSlots) {
-            query += ` AND (s.defined_slots IS NOT NULL AND s.defined_slots != '[]' AND s.defined_slots != '')`;
+      console.log(`[DEBUG] SIMPLIFIED getScheduleForMonthAndDoctor - Raw schedules count: ${schedules ? schedules.length : 'null'}`);
+
+      const processedSchedules = schedules.map(schedule => {
+        let definedSlotsArray = null;
+        if (schedule.defined_slots && typeof schedule.defined_slots === 'string') { 
+          try {
+            definedSlotsArray = JSON.parse(schedule.defined_slots);
+          } catch (e) {
+            console.error(`解析 schedule.defined_slots 失敗 (ID: ${schedule.id}):`, e.message);
           }
         }
-        
-        query += ' ORDER BY s.date, s.doctor_id';
-        if (hasStartTime) query += ', s.start_time';
+        return {
+          ...schedule, 
+          is_rest_day: Boolean(schedule.is_rest_day),
+          defined_slots: definedSlotsArray 
+        };
+      });
 
-        console.log('[DEBUG] Executing SQL query in getScheduleForMonthAndDoctor:', query);
-        console.log('[DEBUG] With parameters in getScheduleForMonthAndDoctor:', JSON.stringify(queryParams));
-
-        db.all(query, queryParams, (err, schedules) => {
-          if (err) {
-            console.error(`查詢排班 (年份: ${year}, 月份: ${monthPadded}, DoctorID: ${doctorId || 'N/A'}, UserRole: ${userRole}) 時SQL語法錯誤: ${err.message}`);
-            console.error(`Failed Query in getScheduleForMonthAndDoctor: ${query}`);
-            console.error(`Failed Params in getScheduleForMonthAndDoctor: ${JSON.stringify(queryParams)}`);
-            return next(err);
-          }
-
-          // 新增日誌：打印原始查詢結果的長度
-          console.log(`[DEBUG] getScheduleForMonthAndDoctor - Raw schedules count for ${year}-${monthPadded} (DoctorID: ${doctorId || 'N/A'}, UserRole: ${userRole}): ${schedules ? schedules.length : 'null or undefined'}`);
-
-          const processedSchedules = schedules.map(schedule => {
-            let definedSlotsArray = null;
-            // 只有當 defined_slots 存在、是非空字串時才嘗試解析
-            if (hasDefinedSlots && schedule.defined_slots && typeof schedule.defined_slots === 'string') { 
-              try {
-                definedSlotsArray = JSON.parse(schedule.defined_slots);
-              } catch (e) {
-                console.error(`解析 schedule.defined_slots 失敗 (ID: ${schedule.id}) for getScheduleForMonthAndDoctor:`, e.message);
-              }
-            }
-            
-            const result = { ...schedule };
-            
-            // 只有當該欄位存在時才進行轉換
-            if (hasIsRestDay) {
-              result.is_rest_day = Boolean(schedule.is_rest_day);
-            }
-            
-            if (hasDefinedSlots) {
-              result.defined_slots = definedSlotsArray;
-            }
-            
-            return result;
-          });
-
-          // 新增日誌：打印處理後結果的長度
-          console.log(`[DEBUG] getScheduleForMonthAndDoctor - Processed schedules count for ${year}-${monthPadded} (DoctorID: ${doctorId || 'N/A'}, UserRole: ${userRole}): ${processedSchedules ? processedSchedules.length : 'null or undefined'}`);
-
-          res.json({
-            message: `成功獲取排班資訊`,
-            year,
-            month,
-            schedules: processedSchedules
-          });
-        });
+      console.log(`[DEBUG] SIMPLIFIED getScheduleForMonthAndDoctor - Processed schedules count: ${processedSchedules ? processedSchedules.length : 'null'}`);
+      res.json({
+        message: `成功獲取排班資訊 (簡化查詢)`,
+        year,
+        month,
+        schedules: processedSchedules
       });
     });
   } catch (error) {
