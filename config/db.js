@@ -181,13 +181,27 @@ const initializeDatabase = (db) => {
 
 // 創建資料庫連接函數
 const connectDatabase = () => {
+  console.log(`[DB DEBUG] Attempting to connect to database at: ${dbPath}`);
   const db = new sqlite3.Database(dbPath, sqlite3.OPEN_READWRITE | sqlite3.OPEN_CREATE, err => {
     if (err) {
-      console.error('無法連接到資料庫:', err.message);
-      return;
+      console.error('[DB ERROR] Could not connect to database:', err.message);
+      // 在這裡，如果連接失敗，db 對象可能未完全初始化或無效，
+      // 添加 .on('error') 可能沒有意義，或者本身就會出錯。
+      // 主要的連接錯誤已經在這裡處理了。
+      return; // 提前返回，因為 db 無效
     }
-    console.log(`成功連接到資料庫，路徑: ${dbPath}`);
+    console.log(`[DB INFO] Successfully connected to database: ${dbPath}`);
     
+    // 為已成功連接的 db 實例添加全局錯誤監聽器
+    db.on('error', (error) => {
+      console.error('[SQLite DB Global Error Event]:', error.message);
+      // 這裡可以考慮更複雜的錯誤處理邏輯，例如嘗試重新連接或關閉應用
+    });
+
+    db.on('open', () => {
+      console.log('[DB INFO] Database connection opened successfully.');
+    });
+
     // 啟用外鍵約束
     db.run('PRAGMA foreign_keys = ON');
     
