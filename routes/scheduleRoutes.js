@@ -13,12 +13,12 @@ module.exports = (db) => {
   const scheduleController = require('../controllers/scheduleController')(db);
 
   // 設置/更新排班 (醫生或管理員可訪問)
-  router.post('/', (req, res, next) => {
+  router.post('/', authenticateUser, (req, res, next) => {
     if (req.user.role === 'admin' || req.user.role === 'doctor') {
       return next();
     }
     res.status(403).json({ error: '只有醫生或管理員可以設置排班' });
-  }, authenticateUser, scheduleController.createOrUpdateSchedule);
+  }, scheduleController.createOrUpdateSchedule);
 
   // 新增：獲取指定月份的排班 (所有已認證用戶可訪問)
   // 此路由應匹配 /api/schedules/:year/:month
