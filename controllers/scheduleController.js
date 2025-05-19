@@ -600,6 +600,13 @@ const getScheduleForMonthAndDoctor = (db) => (req, res, next) => {
         return next(err); // 使用 next(err) 傳遞錯誤到 Express 錯誤處理中間件
       }
 
+      // 新增日誌：打印原始查詢結果的長度
+      console.log(`[DEBUG] getScheduleForMonthAndDoctor - Raw schedules count for ${year}-${monthPadded} (DoctorID: ${doctorId || 'N/A'}, UserRole: ${userRole}): ${schedules ? schedules.length : 'null or undefined'}`);
+      // 如果需要，可以打印部分原始數據，但要注意日誌大小
+      // if (schedules && schedules.length > 0) {
+      //   console.log(`[DEBUG] getScheduleForMonthAndDoctor - First raw schedule:`, JSON.stringify(schedules[0]));
+      // }
+
       const processedSchedules = schedules.map(schedule => {
         let definedSlotsArray = null;
         // 只有當 defined_slots 是非空字串時才嘗試解析
@@ -617,6 +624,12 @@ const getScheduleForMonthAndDoctor = (db) => (req, res, next) => {
           defined_slots: definedSlotsArray 
         };
       });
+
+      // 新增日誌：打印處理後結果的長度
+      console.log(`[DEBUG] getScheduleForMonthAndDoctor - Processed schedules count for ${year}-${monthPadded} (DoctorID: ${doctorId || 'N/A'}, UserRole: ${userRole}): ${processedSchedules ? processedSchedules.length : 'null or undefined'}`);
+      // if (processedSchedules && processedSchedules.length > 0) {
+      //   console.log(`[DEBUG] getScheduleForMonthAndDoctor - First processed schedule:`, JSON.stringify(processedSchedules[0]));
+      // }
 
       res.json({
         message: `成功獲取排班資訊`,
