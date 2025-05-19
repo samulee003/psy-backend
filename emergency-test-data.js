@@ -238,14 +238,13 @@ async function ensureScheduleExists(tableInfo, doctorId, year, month) {
   let addedCount = 0;
 
   for (let day of workDays) {
-    if (existingDates.includes(day) && dateStr !== '2025-05-01') { // 確保強制添加的日期如果被包含，也會再次檢查
-      console.log(`[緊急] ${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')} 已有排班，跳過。`);
+    const dateStr = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+
+    if (existingDates.includes(day) && dateStr !== '2025-05-01') { 
+      console.log(`[緊急] ${dateStr} 已有排班，跳過。`);
       continue;
     }
 
-    const dateStr = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
-    // 如果是強制添加的日期，並且已經被 forceAddSingleScheduleEntry 添加過，這裡的檢查可能會跳過它
-    // 我們需要確保 forceAddSingleScheduleEntry 之後，這裡的邏輯仍然正確
     if (dateStr === '2025-05-01' && existingSchedules.some(s => s.date === '2025-05-01')) {
         console.log(`[緊急] ${dateStr} 已由強制添加處理，此處跳過 ensureScheduleExists 的重複添加。`);
         continue;
