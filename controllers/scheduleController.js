@@ -5,16 +5,42 @@
 // 創建或更新醫生排班
 const createOrUpdateSchedule = (db) => (req, res) => {
   try {
-    const { doctorId, date, startTime, endTime, slotDuration = 30, isRestDay = false } = req.body;
+    const { doctorId, date, startTime, endTime, slotDuration = 30, isRestDay = false, definedSlots } = req.body;
 
     // 驗證必填欄位
     if (!doctorId || !date) {
       return res.status(400).json({ error: '醫生ID和日期都是必填的' });
     }
 
-    // 如果不是休息日，則需要開始時間和結束時間
-    if (!isRestDay && (!startTime || !endTime)) {
-      return res.status(400).json({ error: '如果不是休息日，則需要提供開始時間和結束時間' });
+    // 如果 definedSlots 存在且是有效陣列，則 isRestDay 必須為 false
+    // 並且 startTime, endTime 應該由 definedSlots 決定或驗證，這裡暫時簡化，假設前端會傳遞合理的 startTime/endTime
+    let actualIsRestDay = isRestDay;
+    let definedSlotsJSON = null;
+
+    if (definedSlots && Array.isArray(definedSlots) && definedSlots.length > 0) {
+      actualIsRestDay = false; // 如果有精確時段，則不可能是休息日
+      // 驗證 definedSlots 中的時間格式 (可選，但推薦)
+      for (const slot of definedSlots) {
+        if (!/^\d{2}:\d{2}$/.test(slot)) {
+          return res.status(400).json({ error: `definedSlots 中的時間格式無效: ${slot}` });
+        }
+      }
+      definedSlotsJSON = JSON.stringify(definedSlots);
+      // 這裡可以選擇讓後端根據 definedSlots 計算 startTime 和 endTime，以確保一致性
+      // const calculatedStartTime = definedSlots[0];
+      // const lastSlot = definedSlots[definedSlots.length - 1];
+      // const calculatedEndTime = minutesToTime(timeToMinutes(lastSlot) + slotDuration);
+      // startTime = calculatedStartTime; // 覆蓋傳入的 startTime
+      // endTime = calculatedEndTime;   // 覆蓋傳入的 endTime
+    } else if (definedSlots && (!Array.isArray(definedSlots) || definedSlots.length === 0)) {
+        // 如果傳了 definedSlots 但它是無效的 (例如空陣列或非陣列)，視為錯誤
+        return res.status(400).json({ error: 'definedSlots 如果提供，則必須是包含時段的有效陣列' });
+    }
+
+
+    // 如果不是休息日 (且沒有 definedSlots)，則需要開始時間和結束時間
+    if (!actualIsRestDay && !definedSlotsJSON && (!startTime || !endTime)) {
+      return res.status(400).json({ error: '如果不是休息日且未提供definedSlots，則需要提供開始時間和結束時間' });
     }
 
     // 確保日期格式正確
@@ -49,17 +75,25 @@ const createOrUpdateSchedule = (db) => (req, res) => {
         const scheduleData = {
           doctor_id: doctorId,
           date,
-          start_time: isRestDay ? null : startTime,
-          end_time: isRestDay ? null : endTime,
+          start_time: actualIsRestDay || definedSlotsJSON ? (definedSlotsJSON ? startTime : null) : startTime, // 如果有 definedSlots，startTime 仍來自請求或根據 definedSlots 計算
+          end_time: actualIsRestDay || definedSlotsJSON ? (definedSlotsJSON ? endTime : null) : endTime,     // 同上
           slot_duration: slotDuration,
-          is_rest_day: isRestDay ? 1 : 0
+          is_rest_day: actualIsRestDay ? 1 : 0,
+          defined_slots: definedSlotsJSON // 新增
         };
+
+        // 檢查 existingSchedule.defined_slots 是否與新的 definedSlotsJSON 不同
+        let slotsChanged = false;
+        if (definedSlotsJSON) {
+            slotsChanged = existingSchedule?.defined_slots !== definedSlotsJSON;
+        }
+
 
         if (existingSchedule) {
           // 更新現有排班
           const updateQuery = `
             UPDATE schedule
-            SET start_time = ?, end_time = ?, slot_duration = ?, is_rest_day = ?, updated_at = datetime('now')
+            SET start_time = ?, end_time = ?, slot_duration = ?, is_rest_day = ?, defined_slots = ?, updated_at = datetime('now')
             WHERE doctor_id = ? AND date = ?
           `;
 
@@ -68,6 +102,7 @@ const createOrUpdateSchedule = (db) => (req, res) => {
             scheduleData.end_time,
             scheduleData.slot_duration,
             scheduleData.is_rest_day,
+            scheduleData.defined_slots, // 新增
             scheduleData.doctor_id,
             scheduleData.date
           ], function(err) {
@@ -76,9 +111,18 @@ const createOrUpdateSchedule = (db) => (req, res) => {
               return res.status(500).json({ error: '無法更新排班信息' });
             }
 
-            // 如果是休息日或時間段更改，可能需要處理受影響的預約
-            if (isRestDay || existingSchedule.start_time !== startTime || existingSchedule.end_time !== endTime) {
-              handleAffectedAppointments(db, doctorId, date, isRestDay, startTime, endTime, (err) => {
+            // 如果是休息日或時間段更改 (包括 defined_slots 更改)，可能需要處理受影響的預約
+            const prevDefinedSlots = existingSchedule.defined_slots;
+            const currentDefinedSlots = scheduleData.defined_slots;
+            
+            const workTimeChanged = actualIsRestDay !== Boolean(existingSchedule.is_rest_day) ||
+                                  existingSchedule.start_time !== startTime || 
+                                  existingSchedule.end_time !== endTime ||
+                                  prevDefinedSlots !== currentDefinedSlots;
+
+
+            if (workTimeChanged) {
+              handleAffectedAppointments(db, doctorId, date, actualIsRestDay, startTime, endTime, definedSlots, (err) => { // 傳遞 definedSlots
                 if (err) {
                   console.error('處理受影響的預約錯誤:', err.message);
                   // 即使預約處理出錯，也繼續返回成功
@@ -105,8 +149,8 @@ const createOrUpdateSchedule = (db) => (req, res) => {
         } else {
           // 創建新排班
           const insertQuery = `
-            INSERT INTO schedule (doctor_id, date, start_time, end_time, slot_duration, is_rest_day, created_at)
-            VALUES (?, ?, ?, ?, ?, ?, datetime('now'))
+            INSERT INTO schedule (doctor_id, date, start_time, end_time, slot_duration, is_rest_day, defined_slots, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, datetime('now'))
           `;
 
           db.run(insertQuery, [
@@ -115,7 +159,8 @@ const createOrUpdateSchedule = (db) => (req, res) => {
             scheduleData.start_time,
             scheduleData.end_time,
             scheduleData.slot_duration,
-            scheduleData.is_rest_day
+            scheduleData.is_rest_day,
+            scheduleData.defined_slots // 新增
           ], function(err) {
             if (err) {
               console.error('創建排班錯誤:', err.message);
@@ -189,10 +234,21 @@ const getDoctorSchedule = (db) => (req, res) => {
             id: doctor.id,
             name: doctor.name
           },
-          schedules: schedules.map(schedule => ({
-            ...schedule,
-            is_rest_day: Boolean(schedule.is_rest_day)
-          }))
+          schedules: schedules.map(schedule => {
+            let definedSlotsArray = null;
+            if (schedule.defined_slots) {
+              try {
+                definedSlotsArray = JSON.parse(schedule.defined_slots);
+              } catch (e) {
+                console.error(`解析 schedule.defined_slots 失敗 (ID: ${schedule.id}):`, e.message);
+              }
+            }
+            return {
+              ...schedule,
+              is_rest_day: Boolean(schedule.is_rest_day),
+              defined_slots: definedSlotsArray // 返回解析後的陣列或 null
+            };
+          })
         });
       });
     });
@@ -242,12 +298,32 @@ const getAvailableTimeSlots = (db) => (req, res) => {
             },
             date,
             is_rest_day: true,
+            defined_slots: null, // 休息日沒有 defined_slots
             available_slots: []
           });
         }
 
-        // 生成所有可能的時間段
-        const allSlots = generateTimeSlots(schedule.start_time, schedule.end_time, schedule.slot_duration);
+        let potentialSlots = [];
+        let parsedDefinedSlots = null;
+
+        if (schedule.defined_slots) {
+          try {
+            parsedDefinedSlots = JSON.parse(schedule.defined_slots);
+            if (Array.isArray(parsedDefinedSlots) && parsedDefinedSlots.length > 0) {
+              potentialSlots = parsedDefinedSlots;
+            }
+          } catch (e) {
+            console.error(`解析 schedule.defined_slots 失敗 (ID: ${schedule.id}) for getAvailableTimeSlots:`, e.message);
+            // 解析失敗，則回退到 start_time/end_time 邏輯
+          }
+        }
+
+        if (potentialSlots.length === 0) { // 如果沒有有效的 defined_slots，則使用 start/end time
+            if (!schedule.start_time || !schedule.end_time) {
+                 return res.status(404).json({ error: '該日期排班不完整 (缺少起止時間或精確時段)' });
+            }
+          potentialSlots = generateTimeSlots(schedule.start_time, schedule.end_time, schedule.slot_duration);
+        }
 
         // 獲取該日已預約的時間段
         const appointmentQuery = `
@@ -266,7 +342,7 @@ const getAvailableTimeSlots = (db) => (req, res) => {
           const bookedSlots = bookedAppointments.map(appointment => appointment.time_slot);
 
           // 過濾出可用的時間段
-          const availableSlots = allSlots.filter(slot => !bookedSlots.includes(slot));
+          const availableSlots = potentialSlots.filter(slot => !bookedSlots.includes(slot));
 
           res.json({
             doctor: {
@@ -275,6 +351,7 @@ const getAvailableTimeSlots = (db) => (req, res) => {
             },
             date,
             is_rest_day: false,
+            defined_slots: parsedDefinedSlots, // 返回解析後的 defined_slots
             available_slots: availableSlots
           });
         });
@@ -377,7 +454,7 @@ function minutesToTime(minutes) {
 }
 
 // 處理因排班變更而受影響的預約
-function handleAffectedAppointments(db, doctorId, date, isRestDay, startTime, endTime, callback) {
+function handleAffectedAppointments(db, doctorId, date, isRestDay, startTime, endTime, definedSlotsArray, callback) {
   // 查詢該日的所有預約
   const query = `
     SELECT *
@@ -406,43 +483,64 @@ function handleAffectedAppointments(db, doctorId, date, isRestDay, startTime, en
       return;
     }
 
-    // 檢查哪些預約不在新的工作時間內
-    const startMinutes = timeToMinutes(startTime);
-    const endMinutes = timeToMinutes(endTime);
-    
-    let cancelCount = 0;
-    let processed = 0;
-    
-    appointments.forEach(appointment => {
-      const slotMinutes = timeToMinutes(appointment.time_slot);
+    // 如果提供了 definedSlotsArray，則基於它來判斷
+    if (definedSlotsArray && Array.isArray(definedSlotsArray) && definedSlotsArray.length > 0) {
+      appointments.forEach(appointment => {
+        processed++;
+        if (!definedSlotsArray.includes(appointment.time_slot)) {
+          // 取消不在 definedSlotsArray 中的預約
+          const updateQuery = `
+            UPDATE appointments
+            SET status = 'cancelled', note = COALESCE(note, '') || ' (因排班精確時段調整自動取消)', updated_at = datetime('now')
+            WHERE id = ?
+          `;
+          db.run(updateQuery, [appointment.id], (err) => {
+            if (err) {
+              console.error(`取消預約 ${appointment.id} (精確時段) 錯誤:`, err.message);
+            } else {
+              cancelCount++;
+            }
+            if (processed === appointments.length) {
+              callback(null);
+            }
+          });
+        } else if (processed === appointments.length) {
+          callback(null);
+        }
+      });
+    } else if (startTime && endTime) { // 否則，回退到使用 startTime 和 endTime
+      const startMinutes = timeToMinutes(startTime);
+      const endMinutes = timeToMinutes(endTime);
       
-      if (slotMinutes < startMinutes || slotMinutes >= endMinutes) {
-        // 取消不在工作時間內的預約
-        const updateQuery = `
-          UPDATE appointments
-          SET status = 'cancelled', note = COALESCE(note, '') || ' (因排班調整自動取消)', updated_at = datetime('now')
-          WHERE id = ?
-        `;
+      appointments.forEach(appointment => {
+        processed++;
+        const slotMinutes = timeToMinutes(appointment.time_slot);
         
-        db.run(updateQuery, [appointment.id], (err) => {
+        if (slotMinutes < startMinutes || slotMinutes >= endMinutes) {
+          // 取消不在工作時間內的預約
+          const updateQuery = `
+            UPDATE appointments
+            SET status = 'cancelled', note = COALESCE(note, '') || ' (因排班調整自動取消)', updated_at = datetime('now')
+            WHERE id = ?
+          `;
+          db.run(updateQuery, [appointment.id], (err) => {
+            if (err) {
+              console.error(`取消預約 ${appointment.id} 錯誤:`, err.message);
+            } else {
+              cancelCount++;
+            }
+            if (processed === appointments.length) {
+              callback(null);
+            }
+          });
+        } else {
           processed++;
-          if (err) {
-            console.error(`取消預約 ${appointment.id} 錯誤:`, err.message);
-          } else {
-            cancelCount++;
-          }
-          
           if (processed === appointments.length) {
             callback(null);
           }
-        });
-      } else {
-        processed++;
-        if (processed === appointments.length) {
-          callback(null);
         }
-      }
-    });
+      });
+    }
   });
 }
 
@@ -471,6 +569,7 @@ const getScheduleForMonthAndDoctor = (db) => (req, res) => {
         s.end_time, 
         s.slot_duration, 
         s.is_rest_day,
+        s.defined_slots, // 新增讀取 defined_slots
         u.id as doctor_id,
         u.name as doctor_name
       FROM schedule s
@@ -499,7 +598,21 @@ const getScheduleForMonthAndDoctor = (db) => (req, res) => {
         message: `成功獲取排班資訊`,
         year,
         month,
-        schedules: schedules.map(s => ({ ...s, is_rest_day: Boolean(s.is_rest_day) })) // 確保 is_rest_day 是布林值
+        schedules: schedules.map(s => {
+          let definedSlotsArray = null;
+          if (s.defined_slots) {
+            try {
+              definedSlotsArray = JSON.parse(s.defined_slots);
+            } catch (e) {
+              console.error(`解析 schedule.defined_slots 失敗 (ID: ${s.id}) for getScheduleForMonthAndDoctor:`, e.message);
+            }
+          }
+          return {
+            ...s, 
+            is_rest_day: Boolean(s.is_rest_day),
+            defined_slots: definedSlotsArray // 返回解析後的陣列或 null
+          };
+        })
       });
     });
   } catch (error) {
