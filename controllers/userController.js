@@ -189,11 +189,15 @@ const getDoctors = (db) => (req, res) => {
     ORDER BY name
   `;
 
+  console.log('[DEBUG] Executing SQL query in getDoctors:', query);
+
   db.all(query, [], (err, doctors) => {
     if (err) {
-      console.error('獲取醫生列表錯誤:', err.message);
+      console.error('[ERROR] SQL error in getDoctors:', err.message);
+      console.error('[ERROR] Failed Query in getDoctors:', query);
       return res.status(500).json({ error: '無法獲取醫生列表' });
     }
+    console.log('[DEBUG] getDoctors successful, number of doctors found:', doctors ? doctors.length : 0);
     res.json({ doctors });
   });
 };
