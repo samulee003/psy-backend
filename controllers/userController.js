@@ -182,6 +182,7 @@ const deleteUser = (db) => (req, res) => {
 
 // 獲取醫生列表
 const getDoctors = (db) => (req, res) => {
+  console.log('[DEBUG] Entered getDoctors function');
   const query = `
     SELECT id, name, email, created_at, updated_at
     FROM users
