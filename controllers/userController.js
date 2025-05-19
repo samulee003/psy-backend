@@ -183,24 +183,58 @@ const deleteUser = (db) => (req, res) => {
 // 獲取醫生列表
 const getDoctors = (db) => (req, res) => {
   console.log('[DEBUG] Entered getDoctors function');
-  const query = `
-    SELECT id, name, email, created_at, updated_at
-    FROM users
-    WHERE role = 'doctor'
-    ORDER BY name
-  `;
-
-  console.log('[DEBUG] Executing SQL query in getDoctors:', query);
-
-  db.all(query, [], (err, doctors) => {
-    console.log('[DEBUG] getDoctors - db.all callback entered'); 
+  
+  // 先查詢表結構
+  db.all("PRAGMA table_info(users)", [], (err, columns) => {
     if (err) {
-      console.error('[ERROR] SQL error in getDoctors:', err.message);
-      console.error('[ERROR] Failed Query in getDoctors:', query);
-      return res.status(500).json({ error: '無法獲取醫生列表' });
+      console.error('[ERROR] 無法獲取用戶表結構:', err.message);
+      return res.status(500).json({ error: '無法獲取醫生列表 - 結構查詢錯誤' });
     }
-    console.log('[DEBUG] getDoctors successful, result count:', doctors ? doctors.length : 0);
-    res.json({ doctors: doctors || [] }); 
+    
+    // 查看有哪些欄位可用
+    console.log('[DEBUG] 用戶表欄位:', columns.map(c => c.name).join(', '));
+    
+    // 必須確保有 role 欄位才能查詢醫生
+    if (!columns.some(c => c.name === 'role')) {
+      console.error('[ERROR] 用戶表缺少 role 欄位，無法查詢醫生');
+      return res.status(500).json({ error: '無法獲取醫生列表 - 缺少必要欄位' });
+    }
+    
+    // 構建依據表結構的查詢
+    const hasName = columns.some(c => c.name === 'name');
+    const hasEmail = columns.some(c => c.name === 'email');
+    const hasUsername = columns.some(c => c.name === 'username');
+    const hasCreatedAt = columns.some(c => c.name === 'created_at');
+    const hasUpdatedAt = columns.some(c => c.name === 'updated_at');
+    
+    // 構建SELECT部分
+    let selectFields = ['id'];
+    
+    if (hasName) selectFields.push('name');
+    if (hasEmail) selectFields.push('email');
+    else if (hasUsername) selectFields.push('username as email');  // 如果沒有email但有username，用username代替
+    if (hasCreatedAt) selectFields.push('created_at');
+    if (hasUpdatedAt) selectFields.push('updated_at');
+    
+    const query = `
+      SELECT ${selectFields.join(', ')} 
+      FROM users 
+      WHERE role = 'doctor'
+      ORDER BY ${hasName ? 'name' : 'id'}
+    `;
+    
+    console.log('[DEBUG] 執行醫生查詢:', query);
+    
+    db.all(query, [], (err, doctors) => {
+      console.log('[DEBUG] getDoctors - db.all callback entered'); 
+      if (err) {
+        console.error('[ERROR] SQL error in getDoctors:', err.message);
+        console.error('[ERROR] Failed Query in getDoctors:', query);
+        return res.status(500).json({ error: '無法獲取醫生列表' });
+      }
+      console.log('[DEBUG] getDoctors successful, result count:', doctors ? doctors.length : 0);
+      res.json({ doctors: doctors || [] }); 
+    });
   });
 };
 
