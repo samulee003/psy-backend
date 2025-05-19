@@ -12,7 +12,7 @@ module.exports = (db) => {
   const userRoutes = require('./userRoutes')(db);
   const appointmentRoutes = require('./appointmentRoutes')(db);
   const scheduleRoutes = require('./scheduleRoutes')(db);
-  const settingsRoutes = require('./settingsRoutes'); // 注意：settingsRoutes 不需要傳遞 db，因為它在內部獲取
+  const settingsRoutes = require('./settingsRoutes')(db); // 傳遞 db
 
   // 掛載路由
   router.use('/api/auth', authRoutes);
