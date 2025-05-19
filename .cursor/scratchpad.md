@@ -29,6 +29,18 @@
 
 ## Executor's Feedback or Assistance Requests
 
+- **2024-05-16 (上一輪回饋)**:
+    - `emergency-test-data.js` 腳本在 Zeabur 上的執行日誌與預期不符。 Zeabur 日誌顯示 `/api/users/doctors` 成功返回2位醫生，但 `/api/schedules/2025/05` 仍然返回0條排班數據。
+    - `emergency-test-data.js` 腳本中針對2025年5月添加數據的詳細 `[緊急]` 日誌未出現在 Zeabur 的啟動日誌中。
+    - 要求用戶確認 `zeabur.config.json` 中的啟動命令，確保最新版本的 `emergency-test-data.js` 已推送並重新部署，然後提供新的 Zeabur 啟動日誌。
+- **2024-05-17 (目前狀態)**:
+    - **問題**: Zeabur 日誌顯示 API `/api/users/doctors` 成功返回2位醫生，但 `/api/schedules/2025/05` 仍然返回0條排班數據。
+    - **分析**: `emergency-test-data.js` 腳本在 Zeabur 啟動時輸出的日誌與最新版腳本中的 `[緊急]` 詳細日誌不符。這表明在 Zeabur 上運行的可能不是最新的 `emergency-test-data.js`，或者其日誌未被正確捕獲。如果腳本未按預期為2025年5月添加數據，API 自然無法查詢到。
+    - **下一步**:
+        1.  請用戶確認 `zeabur.config.json` 中的 `start` 命令是否正確指向 `node emergency-test-data.js`。
+        2.  請用戶確保最新版本的 `emergency-test-data.js`（包含 `[緊急]` 日誌和為2025年5月添加數據的邏輯）已 commit 並 push 到 Zeabur 使用的 Git 倉庫。
+        3.  請用戶觸發新的 Zeabur 部署。
+        4.  請用戶提供新部署後的**完整 Zeabur Runtime Logs**，特別是應用程式啟動初期 `emergency-test-data.js` 執行階段的日誌，以便檢查是否有 `[緊急]` 詳細日誌輸出。
 - ~~`git commit -m "Initial commit"` 已執行，但似乎只提交了 `.cursor/scratchpad.md`。~~
 - ~~`git status` 顯示 `.cursor/scratchpad.md` 有未暂存的修改，並且本地分支比遠端分支快一個提交。~~
 - ~~專案根目錄下沒有 `.gitignore` 檔案。~~
