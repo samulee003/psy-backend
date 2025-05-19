@@ -4,7 +4,7 @@
   "description": "Backend server for the React Appointment System",
   "main": "server.js",
   "scripts": {
-    "start": "node server.js",
+    "start": "node update_schema.js && node server.js",
     "dev": "nodemon server.js",
     "lint": "eslint . --ext js --report-unused-disable-directives --max-warnings 0",
     "lint:fix": "eslint --fix . --ext js",
