@@ -11,7 +11,7 @@
       "path": "/data"
     }
   ],
-  "start": "npm start",
+  "start": "node add-test-data.js && npm start",
   "healthCheck": {
     "path": "/api/health",
     "port": 5000
