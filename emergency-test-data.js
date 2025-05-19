@@ -26,6 +26,7 @@ const db = new sqlite3.Database(dbPath, (err) => {
  */
 async function main() {
   try {
+    console.log('[緊急] 主程序開始...');
     // 1. 檢查資料表結構
     console.log('[緊急] 檢查資料表結構...');
     const usersTableInfo = await getTableInfo('users');
@@ -40,7 +41,15 @@ async function main() {
     }
     console.log(`[緊急] 獲取到的醫生 ID: ${doctor.id}`);
     
-    // 3. 確保有排班數據 (例如，為2025年5月)
+    // 3. 強制為2025年5月1日添加一條排班記錄
+    if (scheduleTableInfo.exists) {
+        console.log(`[緊急] 強制為 2025-05-01 添加排班數據 (醫生ID: ${doctor.id})...`);
+        await forceAddSingleScheduleEntry(scheduleTableInfo, doctor.id, '2025-05-01');
+    } else {
+        console.warn('[緊急] Schedule 表不存在，跳過強制添加排班條目。');
+    }
+
+    // 4. 確保有排班數據 (例如，為2025年5月)
     const targetYear = 2025;
     const targetMonth = 5; // 5 代表五月
     console.log(`[緊急] 確保為 ${targetYear}年${targetMonth}月 添加排班數據 (醫生ID: ${doctor.id})...`);
@@ -53,19 +62,54 @@ async function main() {
       } else {
         console.log('[緊急] 資料庫連接已成功關閉');
       }
-      // 正常退出
       process.exit(0);
     });
     
   } catch (error) {
-    console.error('[緊急] 發生錯誤:', error);
+    console.error('[緊急] 主程序發生錯誤:', error);
     db.close((err) => {
       if (err) {
         console.error('[緊急] 關閉資料庫時出錯 (錯誤流程):', err.message);
       }
-      process.exit(1); // 錯誤退出
+      process.exit(1);
     });
   }
+}
+
+/**
+ * 強制添加單條排班記錄的函數
+ */
+async function forceAddSingleScheduleEntry(tableInfo, doctorId, dateStr) {
+    console.log(`[緊急-強制] 準備為 ${dateStr} (醫生ID: ${doctorId}) 添加排班...`);
+    const fields = ['date', 'doctor_id'];
+    const values = [dateStr, doctorId];
+    const placeholders = ['?', '?'];
+
+    if (tableInfo.hasColumn('start_time')) { fields.push('start_time'); values.push('09:00'); placeholders.push('?'); }
+    if (tableInfo.hasColumn('end_time')) { fields.push('end_time'); values.push('12:00'); placeholders.push('?'); }
+    if (tableInfo.hasColumn('is_rest_day')) { fields.push('is_rest_day'); values.push(0); placeholders.push('?'); }
+    if (tableInfo.hasColumn('defined_slots')) {
+      const slots = [
+        { "start": "09:00", "end": "09:30" }, { "start": "09:30", "end": "10:00" },
+        { "start": "10:00", "end": "10:30" }, { "start": "10:30", "end": "11:00" },
+        { "start": "11:00", "end": "11:30" }, { "start": "11:30", "end": "12:00" }
+      ];
+      fields.push('defined_slots'); values.push(JSON.stringify(slots)); placeholders.push('?');
+    }
+
+    try {
+      // 先嘗試刪除已有的記錄，避免唯一性衝突 (如果 date 和 doctor_id 有唯一約束)
+      const deleteQuery = `DELETE FROM schedule WHERE date = ? AND doctor_id = ?`;
+      await runQuery(deleteQuery, [dateStr, doctorId]);
+      console.log(`[緊急-強制] 已嘗試刪除 ${dateStr} (醫生ID: ${doctorId}) 的舊排班 (如果存在)`);
+
+      const insertQuery = `INSERT INTO schedule (${fields.join(', ')}) VALUES (${placeholders.join(', ')})`;
+      const result = await runQuery(insertQuery, values);
+      console.log(`[緊急-強制] 已為 ${dateStr} 強制創建排班 (醫生ID: ${doctorId}), 新排班ID: ${result.lastID}`);
+    } catch (error) {
+      console.error(`[緊急-強制] 為 ${dateStr} (醫生ID: ${doctorId}) 強制創建排班時出錯:`, error.message);
+      // 即使這裡出錯，也繼續執行，讓 ensureScheduleExists 嘗試修復
+    }
 }
 
 /**
@@ -81,8 +125,6 @@ async function getTableInfo(tableName) {
       
       if (!columns || columns.length === 0) {
         console.warn(`[緊急] ${tableName} 表可能不存在或為空`);
-        // 即使表不存在，也resolve，讓後續邏輯處理
-        // 但標記為不存在，並提供一個空的hasColumn函數
         return resolve({
           exists: false,
           columns: [],
@@ -104,7 +146,7 @@ async function getTableInfo(tableName) {
  * 確保存在醫生用戶
  */
 async function ensureDoctorExists(tableInfo) {
-  return new Promise(async (resolve, reject) => { // 將回調改為 async
+  return new Promise(async (resolve, reject) => { 
     if (!tableInfo.exists || !tableInfo.hasColumn('role')) {
       return reject(new Error('users 表不存在或缺少必要的 role 欄位'));
     }
@@ -127,10 +169,10 @@ async function ensureDoctorExists(tableInfo) {
         const placeholders = ['?'];
         
         const optionalFields = [
-          { name: 'username', value: 'emergency.doctor@example.com' }, // 修改 email 以避免唯一性衝突
+          { name: 'username', value: 'emergency.doctor@example.com' }, 
           { name: 'email', value: 'emergency.doctor@example.com' },
           { name: 'password', value: hashedPassword },
-          { name: 'name', value: '緊急測試醫生' }, // 修改名稱以區分
+          { name: 'name', value: '緊急測試醫生' }, 
           { name: 'phone', value: '0999888777' }
         ];
         
@@ -146,8 +188,7 @@ async function ensureDoctorExists(tableInfo) {
         console.log(`[緊急] 執行醫生插入語句: ${query}`);
         console.log(`[緊急] 插入值:`, values);
         
-        // 使用 db.run 的回調來獲取 lastID
-        db.run(query, values, function(runError) { // 注意這裡用普通函數以獲取 this
+        db.run(query, values, function(runError) { 
           if (runError) {
             return reject(new Error(`創建醫生用戶SQL執行失敗: ${runError.message}`));
           }
@@ -171,7 +212,7 @@ async function ensureDoctorExists(tableInfo) {
 async function ensureScheduleExists(tableInfo, doctorId, year, month) {
   if (!tableInfo.exists || !tableInfo.hasColumn('date') || !tableInfo.hasColumn('doctor_id')) {
     console.warn('[緊急] schedule 表不存在或缺少必要的 date/doctor_id 欄位，無法添加排班數據。');
-    return; // 如果表不完整，則不執行後續操作
+    return; 
   }
   if (!doctorId) {
     console.error('[緊急] 無效的 doctorId，無法添加排班數據。');
@@ -182,13 +223,12 @@ async function ensureScheduleExists(tableInfo, doctorId, year, month) {
   const existingSchedules = await getExistingSchedules(doctorId, year, month);
   console.log(`[緊急] ${year}年${month}月 已有 ${existingSchedules.length} 筆排班記錄 (醫生ID: ${doctorId})`);
 
-  // 計算該月應排班的日期 (週一、三、五)
   const daysInMonth = new Date(year, month, 0).getDate();
   const workDays = [];
   for (let day = 1; day <= daysInMonth; day++) {
     const currentDate = new Date(year, month - 1, day);
-    const dayOfWeek = currentDate.getDay(); // 0=Sunday, 1=Monday, ..., 5=Friday, 6=Saturday
-    if (dayOfWeek === 1 || dayOfWeek === 3 || dayOfWeek === 5) { // 週一、三、五
+    const dayOfWeek = currentDate.getDay(); 
+    if (dayOfWeek === 1 || dayOfWeek === 3 || dayOfWeek === 5) { 
       workDays.push(day);
     }
   }
@@ -198,12 +238,19 @@ async function ensureScheduleExists(tableInfo, doctorId, year, month) {
   let addedCount = 0;
 
   for (let day of workDays) {
-    if (existingDates.includes(day)) {
+    if (existingDates.includes(day) && dateStr !== '2025-05-01') { // 確保強制添加的日期如果被包含，也會再次檢查
       console.log(`[緊急] ${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')} 已有排班，跳過。`);
       continue;
     }
 
     const dateStr = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+    // 如果是強制添加的日期，並且已經被 forceAddSingleScheduleEntry 添加過，這裡的檢查可能會跳過它
+    // 我們需要確保 forceAddSingleScheduleEntry 之後，這裡的邏輯仍然正確
+    if (dateStr === '2025-05-01' && existingSchedules.some(s => s.date === '2025-05-01')) {
+        console.log(`[緊急] ${dateStr} 已由強制添加處理，此處跳過 ensureScheduleExists 的重複添加。`);
+        continue;
+    }
+
     const fields = ['date', 'doctor_id'];
     const values = [dateStr, doctorId];
     const placeholders = ['?', '?'];
@@ -223,7 +270,6 @@ async function ensureScheduleExists(tableInfo, doctorId, year, month) {
 
     try {
       const query = `INSERT INTO schedule (${fields.join(', ')}) VALUES (${placeholders.join(', ')})`;
-      // console.log(`[緊急] 執行排班插入: ${query}, VALUES:`, values); // 詳細日誌，需要時取消註釋
       const result = await runQuery(query, values);
       console.log(`[緊急] 已為 ${dateStr} 創建排班 (醫生ID: ${doctorId}), 新排班ID: ${result.lastID}`);
       addedCount++;
@@ -265,7 +311,7 @@ async function getExistingSchedules(doctorId, year, month) {
  */
 function runQuery(query, params = []) {
   return new Promise((resolve, reject) => {
-    db.run(query, params, function(err) { // 使用普通函數以獲取 this 上下文
+    db.run(query, params, function(err) { 
       if (err) {
         console.error(`[緊急] SQL錯誤: ${query} | PARAMS: ${params} | ERROR: ${err.message}`);
         return reject(err);
@@ -276,11 +322,4 @@ function runQuery(query, params = []) {
 }
 
 // 執行主程序
-main(); // 移除 .catch，因為 main 內部已有 catch 和 process.exit
-
-// 執行主程序
-main().catch(error => {
-  console.error('[緊急] 主程序錯誤:', error);
-  db.close();
-  process.exit(1);
-}); 
+main(); 
