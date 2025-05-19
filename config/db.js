@@ -95,7 +95,7 @@ const initializeDatabase = (db) => {
             start_time TEXT,
             end_time TEXT,
             slot_duration INTEGER DEFAULT 30,
-            isRestDay INTEGER DEFAULT 0,
+            is_rest_day INTEGER DEFAULT 0,
             created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
             updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
             FOREIGN KEY (doctor_id) REFERENCES users(id)
