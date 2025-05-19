@@ -4,7 +4,7 @@
   "description": "Backend server for the React Appointment System",
   "main": "server.js",
   "scripts": {
-    "start": "node update_schema.js && node server.js",
+    "start": "node -e \"if (process.env.FORCE_DB_RESET === 'true') { try { require('child_process').execSync('node db-reset-init.js', { stdio: 'inherit' }); console.log('DB Reset via db-reset-init.js successful. Set FORCE_DB_RESET to false or remove it for normal startup.'); process.exit(0); } catch (e) { console.error('Error during db-reset-init.js:', e); process.exit(1); } } else { try { require('child_process').execSync('node update_schema.js && node server.js', { stdio: 'inherit' }); } catch (e) { console.error('Error during normal startup (update_schema.js && server.js):', e); process.exit(1); } }\"",
     "dev": "nodemon server.js",
     "lint": "eslint . --ext js --report-unused-disable-directives --max-warnings 0",
     "lint:fix": "eslint --fix . --ext js",
@@ -12,6 +12,7 @@
     "db:backup": "node db-backup.js",
     "db:restore": "node db-restore.js",
     "db:update-schema": "node update_schema.js",
+    "db:reset-init": "node db-reset-init.js",
     "test:create-data": "node create-test-data.js",
     "test:verify-data": "node verify-test-data.js"
   },
