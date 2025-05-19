@@ -193,6 +193,7 @@ const getDoctors = (db) => (req, res) => {
   console.log('[DEBUG] Executing SQL query in getDoctors:', query);
 
   db.all(query, [], (err, doctors) => {
+    console.log('[DEBUG] getDoctors - db.all callback entered');
     if (err) {
       console.error('[ERROR] SQL error in getDoctors:', err.message);
       console.error('[ERROR] Failed Query in getDoctors:', query);
