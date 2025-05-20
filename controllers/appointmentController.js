@@ -229,71 +229,90 @@ const getAppointmentById = (db) => (req, res) => {
 
 // 更新預約狀態
 const updateAppointmentStatus = (db) => (req, res) => {
+  console.log(`[更新狀態日誌] 進入 updateAppointmentStatus 函數 - appointmentId: ${req.params.appointmentId}, user: ${JSON.stringify(req.user)}, body: ${JSON.stringify(req.body)}`);
   try {
     const { appointmentId } = req.params;
     const { status, note } = req.body;
 
+    console.log(`[更新狀態日誌] appointmentId: ${appointmentId}, status: ${status}, note: ${note}`);
+
     // 驗證狀態
     const validStatuses = ['pending', 'confirmed', 'completed', 'cancelled'];
     if (!status || !validStatuses.includes(status)) {
+      console.warn('[更新狀態日誌] 無效的預約狀態:', status);
       return res.status(400).json({ error: '無效的預約狀態' });
     }
 
     // 檢查預約是否存在
     db.get('SELECT * FROM appointments WHERE id = ?', [appointmentId], (err, appointment) => {
       if (err) {
-        console.error('查詢預約錯誤:', err.message);
+        console.error('[更新狀態日誌] 查詢預約錯誤:', err.message);
         return res.status(500).json({ error: '伺服器錯誤' });
       }
 
       if (!appointment) {
+        console.log(`[更新狀態日誌] 預約 ${appointmentId} 不存在`);
         return res.status(404).json({ error: '預約不存在' });
       }
+      console.log(`[更新狀態日誌] 找到預約 ${appointmentId}:`, JSON.stringify(appointment));
+      console.log(`[更新狀態日誌] 當前用戶:`, JSON.stringify(req.user));
+      console.log(`[更新狀態日誌] 請求的狀態: ${status}`);
 
-      // 檢查用戶是否有權限更新此預約
-      // 醫生只能更新自己的預約，患者只能取消自己的預約
-      if (
-        (req.user.role === 'doctor' && req.user.id !== appointment.doctor_id) ||
-        (req.user.role === 'patient' && req.user.id !== appointment.patient_id) ||
-        (req.user.role === 'patient' && status !== 'cancelled')
-      ) {
-        return res.status(403).json({ error: '無權更新此預約' });
+      // 權限檢查
+      if (req.user.role === 'patient' && req.user.id !== appointment.patient_id) {
+        console.warn(`[更新狀態日誌][權限警告] 患者 ${req.user.id} 嘗試修改他人預約 ${appointmentId}`);
+        return res.status(403).json({ error: '患者無權修改他人預約' });
       }
+      
+      if (req.user.role === 'doctor' && appointment.doctor_id !== req.user.id) {
+        console.warn(`[更新狀態日誌][權限警告] 醫生 ${req.user.id} (${req.user.name}) 嘗試修改不屬於自己的預約 ${appointmentId} (原醫生ID: ${appointment.doctor_id})`);
+        return res.status(403).json({ error: '醫生無權修改不屬於自己的預約' });
+      }
+      console.log(`[更新狀態日誌] 權限檢查通過 (用戶 ${req.user.id} / 角色 ${req.user.role})，準備更新預約 ${appointmentId} 的狀態為 ${status}`);
 
       // 更新預約狀態
       const updateQuery = `
-        UPDATE appointments
-        SET status = ?, updated_at = datetime('now')
-        ${note ? ', note = ?' : ''}
+        UPDATE appointments 
+        SET status = ?, notes = ?, updated_at = datetime('now')
         WHERE id = ?
       `;
-
-      const params = note
-        ? [status, note, appointmentId]
-        : [status, appointmentId];
+      const params = [status, note || appointment.notes, appointmentId]; 
+      console.log('[更新狀態日誌] 準備執行更新SQL:', updateQuery, '參數:', JSON.stringify(params));
 
       db.run(updateQuery, params, function(err) {
         if (err) {
-          console.error('更新預約狀態錯誤:', err.message);
+          console.error('[更新狀態日誌] 更新預約狀態SQL錯誤:', err.message);
           return res.status(500).json({ error: '無法更新預約狀態' });
         }
+        console.log(`[更新狀態日誌] 更新成功，影響行數: ${this.changes}`);
 
-        // 獲取更新後的預約信息
+        if (this.changes === 0) {
+          console.warn(`[更新狀態日誌] 預約 ${appointmentId} 未被更新 (可能狀態未改變或ID不存在)`);
+          return res.status(404).json({ error: '預約不存在或狀態未改變' });
+        }
+        
+        console.log(`[更新狀態日誌] 準備獲取更新後的預約 ${appointmentId}`);
         db.get('SELECT * FROM appointments WHERE id = ?', [appointmentId], (err, updatedAppointment) => {
           if (err) {
-            console.error('獲取更新後預約信息錯誤:', err.message);
-            return res.status(500).json({ error: '預約狀態已更新，但無法獲取更新後的數據' });
+            console.error('[更新狀態日誌] 更新後獲取預約信息錯誤:', err.message);
+            return res.status(200).json({ 
+              success: true, 
+              message: '預約狀態已更新，但獲取最新信息失敗',
+              appointmentId: appointmentId,
+              status: status 
+            });
           }
-
-          res.json({
-            message: '預約狀態已成功更新',
-            appointment: updatedAppointment
+          console.log(`[更新狀態日誌] 成功獲取更新後的預約 ${appointmentId}:`, JSON.stringify(updatedAppointment));
+          res.json({ 
+            success: true, 
+            message: '預約狀態已成功更新', 
+            appointment: updatedAppointment 
           });
         });
       });
     });
   } catch (error) {
-    console.error('更新預約狀態過程中發生錯誤:', error.message);
+    console.error('[更新狀態日誌] 更新預約狀態過程中發生頂層錯誤:', error.message, error.stack);
     res.status(500).json({ error: '更新預約狀態失敗，請稍後再試' });
   }
 };
