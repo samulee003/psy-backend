@@ -29,6 +29,12 @@ module.exports = (db) => {
   // 更新預約狀態 (根據用戶角色和操作類型檢查權限)
   router.put('/:appointmentId/status', authenticateUser, appointmentController.updateAppointmentStatus);
 
+  // 新增：取消預約（向下相容前端）
+  router.put('/:appointmentId/cancel', authenticateUser, (req, res, next) => {
+    req.body.status = 'cancelled';
+    return appointmentController.updateAppointmentStatus(req, res, next);
+  });
+
   // 刪除預約 (僅管理員和醫生可訪問)
   router.delete('/:appointmentId', (req, res, next) => {
     if (req.user.role === 'admin') {
