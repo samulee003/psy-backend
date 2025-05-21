@@ -6,13 +6,30 @@
 const createAppointment = (db) => (req, res) => {
   console.log('[預約日誌] 進入 createAppointment 函數');
   try {
-    const { doctorId, patientId, date, time, note } = req.body;
+    const { 
+      doctorId,          // 保持 doctorId
+      patientId,         // 保持 patientId
+      appointmentDate,   // 從前端接收 appointmentDate
+      timeSlot,          // 從前端接收 timeSlot
+      reason,            // 假設 reason 是主要備註
+      notes,             // 也接收 notes，可以選擇性使用或合併
+      isNewPatient,      // 從前端接收 isNewPatient
+      patientInfo        // 從前端接收 patientInfo 物件
+    } = req.body;
+
+    // 後端內部變數可以重新映射，或者直接使用接收到的名稱
+    // 為了減少後續代碼的改動，我們可以將接收到的值賦給舊的變數名
+    const date = appointmentDate;
+    const time = timeSlot;
+    const note = reason; // 或者 const note = notes; 或者合併它們
+
     console.log('[預約日誌] 收到的請求體 req.body:', req.body);
     console.log('[預約日誌] 當前登入用戶 req.user:', req.user);
 
-    // 驗證必填欄位
+    // 驗證必填欄位 (使用 date 和 time)
     if (!doctorId || !patientId || !date || !time) {
       console.error('[預約日誌] 錯誤：缺少必填欄位', { doctorId, patientId, appointmentDate: date, timeSlot: time });
+      // 注意錯誤訊息中仍然使用 appointmentDate 和 timeSlot，以保持與前端的術語一致
       return res.status(400).json({ error: '醫生ID、患者ID、預約日期和時間段都是必填的' });
     }
 
@@ -75,6 +92,14 @@ const createAppointment = (db) => (req, res) => {
           if (!patient) {
             console.warn('[預約日誌] 警告：患者不存在', { patientId });
             return res.status(404).json({ error: '患者不存在' });
+          }
+
+          // 如果 isNewPatient 為 true，則使用 patientInfo 中的數據創建新用戶或更新用戶資訊
+          if (isNewPatient && patientInfo) {
+            console.log('[預約日誌] 新患者，信息:', patientInfo);
+            // 在這裡添加創建或更新 users 表的邏輯
+            // 例如: db.run("UPDATE users SET phone = ?, email = ?, gender = ?, birth_date = ? WHERE id = ?", [patientInfo.phone, patientInfo.email, patientInfo.gender, patientInfo.birthDate, patientId], ...);
+            // 或者如果是全新患者且 patientId 此時是無效的，則需要先創建 user 記錄。這取決於您的 patientId 生成和管理流程。
           }
 
           // 創建預約
