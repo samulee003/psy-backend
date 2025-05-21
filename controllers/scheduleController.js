@@ -329,7 +329,7 @@ const getAvailableTimeSlots = (db) => (req, res) => {
 
         // 獲取該日已預約的時間段
         const appointmentQuery = `
-          SELECT time_slot
+          SELECT time 
           FROM appointments
           WHERE doctor_id = ? AND date = ? AND status != 'cancelled'
         `;
@@ -341,7 +341,7 @@ const getAvailableTimeSlots = (db) => (req, res) => {
           }
 
           // 找出已預約的時間段
-          const bookedSlots = bookedAppointments.map(appointment => appointment.time_slot);
+          const bookedSlots = bookedAppointments.map(appointment => appointment.time);
 
           // 過濾出可用的時間段
           const availableSlots = potentialSlots.filter(slot => !bookedSlots.includes(slot));
@@ -493,7 +493,7 @@ function handleAffectedAppointments(db, doctorId, date, isRestDay, startTime, en
     // 如果提供了 definedSlotsArray，則基於它來判斷
     if (definedSlotsArray && Array.isArray(definedSlotsArray) && definedSlotsArray.length > 0) {
       appointments.forEach(appointment => {
-        if (!definedSlotsArray.includes(appointment.time_slot)) {
+        if (!definedSlotsArray.includes(appointment.time)) {
           // 取消不在 definedSlotsArray 中的預約
           const updateQuery = `
             UPDATE appointments
@@ -525,7 +525,7 @@ function handleAffectedAppointments(db, doctorId, date, isRestDay, startTime, en
       const endMinutes = timeToMinutes(endTime);
       
       appointments.forEach(appointment => {
-        const slotMinutes = timeToMinutes(appointment.time_slot);
+        const slotMinutes = timeToMinutes(appointment.time);
         
         if (slotMinutes < startMinutes || slotMinutes >= endMinutes) {
           // 取消不在工作時間內的預約
