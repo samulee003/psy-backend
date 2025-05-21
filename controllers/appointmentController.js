@@ -448,8 +448,16 @@ const getMyAppointments = (db) => (req, res) => {
         console.error('獲取我的預約列表錯誤:', err.message);
         return res.status(500).json({ error: '無法獲取預約列表' });
       }
-      // 返回 success: true 以匹配前端期望的格式
-      res.json({ success: true, appointments });
+      // 新增：處理 patient_name 到 patientName 的映射
+      const processedAppointments = appointments.map(app => {
+        const { patient_name, ...rest } = app;
+        return {
+          ...rest,
+          patientName: patient_name
+        };
+      });
+      // 返回 success: true 以匹配前端期望的格式，並使用處理過的預約列表
+      res.json({ success: true, appointments: processedAppointments });
     });
   } catch (error) {
     console.error('獲取我的預約過程中發生錯誤:', error.message);
