@@ -203,7 +203,14 @@ const getAppointments = (db) => (req, res) => {
         console.error('獲取預約列表錯誤:', err.message);
         return res.status(500).json({ error: '無法獲取預約列表' });
       }
-      res.json({ appointments });
+      const processedAppointments = appointments.map(app => {
+        const { patient_name, ...rest } = app;
+        return {
+          ...rest,
+          patientName: patient_name
+        };
+      });
+      res.json({ appointments: processedAppointments });
     });
   } catch (error) {
     console.error('獲取預約列表過程中發生錯誤:', error.message);
