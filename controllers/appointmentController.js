@@ -119,25 +119,47 @@ const createAppointment = (db) => (req, res) => {
                 console.error('[預約日誌] 創建預約SQL錯誤:', err.message);
                 return res.status(500).json({ error: '無法創建預約' });
               }
-              console.log('[預約日誌] 創建預約成功，影響行數:', this.changes, '最後插入ID:', this.lastID);
+              console.log('[預約日誌] 創建預約成功 (pending)，影響行數:', this.changes, '最後插入ID:', this.lastID);
+              
+              const newAppointmentId = this.lastID;
 
-              // 獲取剛創建的預約
-              console.log('[預約日誌] 準備獲取剛創建的預約，ID:', this.lastID);
-              db.get('SELECT * FROM appointments WHERE id = ?', [this.lastID], (err, newAppointment) => {
-                if (err) {
-                  console.error('[預約日誌] 獲取新預約SQL錯誤:', err.message);
-                  return res.status(500).json({ 
-                    message: '預約已創建，但無法獲取詳細信息',
-                    appointmentId: this.lastID
-                  });
+              // --- 新增：自動將預約狀態更新為 confirmed ---
+              const updateConfirmQuery = `
+                UPDATE appointments
+                SET status = 'confirmed'
+                WHERE id = ?
+              `;
+              db.run(updateConfirmQuery, [newAppointmentId], (updateErr) => {
+                if (updateErr) {
+                  console.error('[預約日誌] 自動確認預約狀態SQL錯誤:', updateErr.message);
+                  // 即使自動確認失敗，也繼續嘗試獲取並返回預約信息 (狀態仍為 pending)
+                } else {
+                  console.log('[預約日誌] 預約已自動確認，ID:', newAppointmentId);
                 }
-                console.log('[預約日誌] 成功獲取新預約:', newAppointment);
 
-                res.status(201).json({
-                  message: '預約已成功創建',
-                  appointment: newAppointment
+                // 無論自動確認是否成功，都繼續獲取剛創建/更新的預約
+                console.log('[預約日誌] 準備獲取剛創建/更新的預約，ID:', newAppointmentId);
+                db.get('SELECT * FROM appointments WHERE id = ?', [newAppointmentId], (err, finalAppointment) => {
+                  if (err) {
+                    console.error('[預約日誌] 獲取新預約SQL錯誤:', err.message);
+                    return res.status(500).json({ 
+                      message: '預約已創建但獲取詳細信息失敗',
+                      appointmentId: newAppointmentId
+                    });
+                  }
+                  console.log('[預約日誌] 成功獲取新預約 (狀態應為 confirmed 或 pending):', finalAppointment);
+
+                  // 根據實際的最終狀態調整 message
+                  const message = finalAppointment && finalAppointment.status === 'confirmed' 
+                                  ? '預約已成功創建並自動確認' 
+                                  : '預約已成功創建，等待確認';
+                  res.status(201).json({
+                    message,
+                    appointment: finalAppointment
+                  });
                 });
               });
+              // --- 新增邏輯結束 ---
             }
           );
         });
