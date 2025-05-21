@@ -574,17 +574,14 @@ const getScheduleForMonthAndDoctor = (db) => (req, res, next) => {
 
     const monthPadded = month.padStart(2, '0');
     
-    // 先檢查資料表結構
     console.log(`[DEBUG] getScheduleForMonthAndDoctor - 檢查資料表結構`);
     
-    // 檢查 users 表
     db.all("PRAGMA table_info(users)", [], (err, userColumns) => {
       if (err) {
         console.error(`[ERROR] 無法獲取用戶表結構:`, err.message);
         return next(new Error('資料庫結構查詢錯誤'));
       }
       
-      // 檢查必要欄位
       const hasRole = userColumns.some(c => c.name === 'role');
       const hasName = userColumns.some(c => c.name === 'name');
       
@@ -593,7 +590,6 @@ const getScheduleForMonthAndDoctor = (db) => (req, res, next) => {
         return res.status(500).json({ error: '資料庫結構不兼容' });
       }
       
-      // 檢查 schedule 表
       db.all("PRAGMA table_info(schedule)", [], (err, scheduleColumns) => {
         if (err) {
           console.error(`[ERROR] 無法獲取排班表結構:`, err.message);
@@ -602,9 +598,8 @@ const getScheduleForMonthAndDoctor = (db) => (req, res, next) => {
         
         console.log(`[DEBUG] getScheduleForMonthAndDoctor - Schedule 表欄位:`, scheduleColumns.map(c => c.name).join(', '));
         
-        // 檢查必要欄位
         const hasDate = scheduleColumns.some(c => c.name === 'date');
-        const hasDoctorIdFromSchedule = scheduleColumns.some(c => c.name === 'doctor_id'); //避免與參數 doctorId 衝突
+        const hasDoctorIdFromSchedule = scheduleColumns.some(c => c.name === 'doctor_id');
         const hasIsRestDay = scheduleColumns.some(c => c.name === 'is_rest_day');
         const hasDefinedSlots = scheduleColumns.some(c => c.name === 'defined_slots');
         const hasStartTime = scheduleColumns.some(c => c.name === 'start_time');
@@ -615,14 +610,12 @@ const getScheduleForMonthAndDoctor = (db) => (req, res, next) => {
           return res.status(500).json({ error: '資料庫結構不兼容' });
         }
         
-        // 構建 SELECT 語句
         const scheduleSelectFields = ['s.id', 's.date', 's.doctor_id'];
         if (hasStartTime) scheduleSelectFields.push('s.start_time');
         if (hasEndTime) scheduleSelectFields.push('s.end_time');
         if (hasIsRestDay) scheduleSelectFields.push('s.is_rest_day');
         if (hasDefinedSlots) scheduleSelectFields.push('s.defined_slots');
         
-        // user 表欄位
         const userSelectFields = [];
         if (hasName) userSelectFields.push('u.name as doctor_name');
         
@@ -640,14 +633,10 @@ const getScheduleForMonthAndDoctor = (db) => (req, res, next) => {
           query += ' AND s.doctor_id = ?';
           queryParams.push(doctorId);
         } else if (userRole === 'patient') {
-          // 患者只能看到可預約的醫生時段
           query += ` AND s.doctor_id IN (SELECT id FROM users WHERE role = 'doctor')`;
-          
-          // 只有當這些欄位存在時，才添加相應的過濾條件
           if (hasIsRestDay) {
             query += ` AND (s.is_rest_day = 0 OR s.is_rest_day IS NULL)`;
           }
-          
           let availabilityConditions = [];
           if (hasDefinedSlots) {
             availabilityConditions.push(`(s.defined_slots IS NOT NULL AND s.defined_slots != '[]' AND s.defined_slots != '')`);
@@ -655,12 +644,9 @@ const getScheduleForMonthAndDoctor = (db) => (req, res, next) => {
           if (hasStartTime && hasEndTime) {
             availabilityConditions.push(`(s.start_time IS NOT NULL AND s.end_time IS NOT NULL AND s.start_time != '' AND s.end_time != '')`);
           }
-
           if (availabilityConditions.length > 0) {
             query += ` AND (${availabilityConditions.join(' OR ')})`;
           } else {
-            // 如果 schedule 表沒有 defined_slots 和 start_time/end_time，則患者無法看到任何排班
-            // 這種情況下，返回空結果，因為沒有可判斷的排班依據
              console.warn('[WARN] 患者查詢排班，但 schedule 表缺少 defined_slots 或 start_time/end_time 欄位，將返回空結果。');
           }
         }
@@ -671,7 +657,7 @@ const getScheduleForMonthAndDoctor = (db) => (req, res, next) => {
         console.log('[DEBUG] Executing SQL query in getScheduleForMonthAndDoctor:', query);
         console.log('[DEBUG] With parameters in getScheduleForMonthAndDoctor:', JSON.stringify(queryParams));
 
-        db.all(query, queryParams, (err, schedules) => {
+        db.all(query, queryParams, async (err, schedules) => {
           if (err) {
             console.error(`查詢排班 (年份: ${year}, 月份: ${monthPadded}, DoctorID: ${doctorId || 'N/A'}, UserRole: ${userRole}) 時SQL語法錯誤: ${err.message}`);
             console.error(`Failed Query in getScheduleForMonthAndDoctor: ${query}`);
@@ -681,7 +667,27 @@ const getScheduleForMonthAndDoctor = (db) => (req, res, next) => {
 
           console.log(`[DEBUG] getScheduleForMonthAndDoctor - Raw schedules count for ${year}-${monthPadded} (DoctorID: ${doctorId || 'N/A'}, UserRole: ${userRole}): ${schedules ? schedules.length : 'null or undefined'}`);
 
-          const processedSchedules = schedules.map(schedule => {
+          const schedulesWithBookedSlots = await Promise.all(schedules.map(async (schedule) => {
+            const bookedSlotsQuery = `
+              SELECT time  
+              FROM appointments 
+              WHERE doctor_id = ? AND date = ? AND status != 'cancelled'
+            `;
+            
+            return new Promise((resolve, reject) => {
+              db.all(bookedSlotsQuery, [schedule.doctor_id, schedule.date], (err, bookedAppointments) => {
+                if (err) {
+                  console.error(`[ERROR] 查詢醫生 ${schedule.doctor_id} 在 ${schedule.date} 的已預約時段失敗:`, err.message);
+                  resolve({ ...schedule, booked_slots: [] }); 
+                  return;
+                }
+                const bookedTimes = bookedAppointments.map(appt => appt.time);
+                resolve({ ...schedule, booked_slots: bookedTimes });
+              });
+            });
+          }));
+
+          const processedSchedules = schedulesWithBookedSlots.map(schedule => {
             let definedSlotsArray = null;
             if (hasDefinedSlots && schedule.defined_slots && typeof schedule.defined_slots === 'string') { 
               try {
@@ -722,5 +728,5 @@ module.exports = (db) => ({
   getDoctorSchedule: getDoctorSchedule(db),
   getAvailableTimeSlots: getAvailableTimeSlots(db),
   deleteSchedule: deleteSchedule(db),
-  getScheduleForMonthAndDoctor: getScheduleForMonthAndDoctor(db) // 導出新方法
+  getScheduleForMonthAndDoctor: getScheduleForMonthAndDoctor(db)
 }); 
