@@ -1,157 +1,117 @@
 # 心理治療預約系統 - 後端
 
-## 身份驗證問題修復說明
+這是一個用於心理治療預約管理的後端 API 服務。
 
-### 問題描述
+## 主要功能
 
-在不同裝置或無痕模式下登入系統時，用戶無法看到原有的排班資訊和治療師列表。問題的根本原因是身份驗證機制在跨裝置/無痕模式環境中未能正確保持登入狀態。
+- 用戶管理：註冊、登入、權限控制
+- 醫生排班管理
+- 患者預約掛號
+- 預約查詢與管理
 
-具體表現為：
-- 登入成功後，伺服器正確設置了Cookie
-- 但後續API請求中，Cookie未被瀏覽器帶上
-- 導致所有需要身份驗證的API請求（如獲取排班資訊、預約等）返回401錯誤
+## 最近改進
 
-### 已實施的修復
+### 2023-06-11: 修復跨裝置登入問題
 
-後端已做出以下修改：
+- 修復了醫生無法從新裝置或無痕模式登入後查看排班的問題
+- 優化了 Cookie 設置，支援跨域訪問
+- 添加了 token 在回應中的返回，支援前端 localStorage 存儲
 
-1. **增強身份驗證中介軟體**：
-   - 增加token獲取方式，除了從Cookie和Authorization頭外，還支持從URL參數獲取
-   - 優化了身份驗證失敗時的錯誤訊息
+### 2023-06-12: 修復用戶註冊問題
 
-2. **改進登入和註冊API回應**：
-   - 登入和註冊成功時除了設置Cookie，還在回應中返回token
-   - 這使得前端可以選擇將token存儲在localStorage中，解決跨裝置/無痕模式問題
+- 修復了同一帳戶可以多次註冊的問題
+- 同時檢查 email 和 username 避免重複註冊
 
-3. **優化CORS配置**：
-   - 設置更完整的CORS屬性，確保跨域請求可以正確傳遞Cookie和Authorization頭
-   - 添加額外的允許源和方法
+### 2023-06-15: 系統安全性和數據驗證增強
 
-### 患者端和醫生端的共同修復
+- 添加了嚴格的日期和時間驗證
+- 禁止預約過去的時間
+- 禁止為過去的日期創建或更新排班
+- 增強了排班時間段的驗證邏輯
+- 增加了患者資料的驗證
+- 統一了時間處理邏輯，提高了系統的一致性
 
-此修復同時適用於患者端和醫生端，因為兩者共用相同的身份驗證機制。修復後：
+## 技術堆疊
 
-1. **患者端功能**：
-   - 患者能夠在任何裝置或無痕模式下正常登入
-   - 能夠查看醫生排班信息
-   - 能夠創建和管理自己的預約
+- Node.js
+- Express.js
+- SQLite 數據庫
+- JSON Web Token (JWT) 身份驗證
+- bcrypt 密碼加密
 
-2. **醫生端功能**：
-   - 醫生能夠在任何裝置或無痕模式下正常登入
-   - 能夠管理自己的排班
-   - 能夠查看和管理預約
+## 前端整合說明
 
-### 前端需要做的調整
+### 登入流程
 
-為了完全解決問題，前端需要做以下調整：
+當用戶成功登入後，後端會:
 
-1. **修改登入處理**：
-   ```javascript
-   // 登入成功後，將token存入localStorage
-   const handleLogin = async (credentials) => {
-     try {
-       const response = await fetch('/api/auth/login', {
-         method: 'POST',
-         headers: { 'Content-Type': 'application/json' },
-         credentials: 'include', // 重要：告訴瀏覽器包含Cookie
-         body: JSON.stringify(credentials)
-       });
-       
-       const data = await response.json();
-       
-       if (response.ok) {
-         // 存儲token到localStorage
-         localStorage.setItem('authToken', data.token);
-         
-         // 繼續處理登入成功邏輯...
-       }
-     } catch (error) {
-       console.error('登入失敗:', error);
-     }
-   };
-   ```
+1. 設置一個 HTTP-only Cookie 包含 JWT token
+2. 在響應中返回 token 字段，前端應將其存儲在 localStorage 中
 
-2. **添加請求攔截器**：
-   ```javascript
-   // 為所有API請求添加Authorization頭
-   const apiRequest = async (url, options = {}) => {
-     // 從localStorage獲取token
-     const token = localStorage.getItem('authToken');
-     
-     // 準備請求選項
-     const requestOptions = {
-       ...options,
-       credentials: 'include', // 包含Cookie
-       headers: {
-         ...options.headers,
-         'Content-Type': 'application/json',
-       }
-     };
-     
-     // 如果有token，添加到請求頭
-     if (token) {
-       requestOptions.headers = {
-         ...requestOptions.headers,
-         'Authorization': `Bearer ${token}`
-       };
-     }
-     
-     return fetch(url, requestOptions);
-   };
-   ```
+前端需要:
+```javascript
+// 登入請求
+async function login(email, password) {
+  const response = await fetch('/api/auth/login', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    credentials: 'include', // 必須，用於接收和發送 cookies
+    body: JSON.stringify({ email, password })
+  });
+  
+  const data = await response.json();
+  
+  if (response.ok) {
+    // 存儲 token 到 localStorage 作為後備
+    localStorage.setItem('auth_token', data.token);
+    return data.user;
+  } else {
+    throw new Error(data.error || '登入失敗');
+  }
+}
 
-3. **處理註冊成功**:
-   ```javascript
-   // 註冊成功後，將token存入localStorage
-   const handleRegister = async (userData) => {
-     try {
-       const response = await fetch('/api/auth/register', {
-         method: 'POST',
-         headers: { 'Content-Type': 'application/json' },
-         credentials: 'include',
-         body: JSON.stringify(userData)
-       });
-       
-       const data = await response.json();
-       
-       if (response.ok) {
-         // 存儲token到localStorage
-         localStorage.setItem('authToken', data.token);
-         
-         // 繼續處理註冊成功邏輯...
-       }
-     } catch (error) {
-       console.error('註冊失敗:', error);
-     }
-   };
-   ```
+// API 請求工具函數
+async function apiRequest(url, options = {}) {
+  // 設置默認 headers
+  const headers = options.headers || {};
+  
+  // 嘗試從 localStorage 獲取 token 並添加到 Authorization header
+  const token = localStorage.getItem('auth_token');
+  if (token) {
+    headers['Authorization'] = `Bearer ${token}`;
+  }
+  
+  // 確保 credentials 被設置為 'include' 以發送 cookies
+  return fetch(url, {
+    ...options,
+    headers,
+    credentials: 'include'
+  });
+}
+```
 
-4. **登出處理**：
-   ```javascript
-   const handleLogout = async () => {
-     try {
-       await fetch('/api/auth/logout', {
-         method: 'POST',
-         credentials: 'include'
-       });
-       
-       // 清除localStorage中的token
-       localStorage.removeItem('authToken');
-       
-       // 繼續處理登出邏輯...
-     } catch (error) {
-       console.error('登出失敗:', error);
-     }
-   };
-   ```
+### 註冊流程
 
-### 測試方法
+類似於登入流程，當用戶成功註冊後，後端也會:
 
-1. 使用普通模式登入系統，檢查是否能看到排班資訊
-2. 使用無痕模式登入系統，檢查是否能看到排班資訊
-3. 在不同裝置上登入系統，檢查是否能看到排班資訊
-4. 登入後關閉並重新打開瀏覽器，檢查是否仍保持登入狀態
-5. 測試註冊新用戶，確認能正常登入並使用系統功能
-6. 在患者端測試預約功能，確認能正常創建和管理預約
+1. 設置一個 HTTP-only Cookie 包含 JWT token
+2. 在響應中返回 token 字段，前端應將其存儲在 localStorage 中
 
-如果您有任何問題或需要進一步的協助，請聯繫系統管理員。 
+### 時間處理建議
+
+前端在處理日期和時間時，請注意：
+
+1. 所有日期應使用 YYYY-MM-DD 格式
+2. 所有時間應使用 24 小時制的 HH:MM 格式，且分鐘值只能是 00 或 30
+3. 請確保在預約和排班時檢查日期和時間的有效性
+4. 不要允許用戶選擇過去的日期或時間
+
+## 本地開發
+
+1. 克隆此倉庫
+2. 安裝依賴: `npm install`
+3. 啟動開發服務器: `npm run dev`
+
+## API 文檔
+
+詳細的 API 文檔可參閱 [API.md](./API.md) 文件。 
