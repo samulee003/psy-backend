@@ -5,10 +5,18 @@
 const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
 const { JWT_SECRET } = require('../middlewares/auth');
+const validators = require('../utils/validators');
 
 // 註冊新用戶
 const register = (db) => async (req, res) => {
   try {
+    // 驗證用戶輸入
+    const validation = validators.validateUser(req.body);
+    if (!validation.isValid) {
+      console.log('[Auth] 註冊錯誤: 驗證失敗', validation.error);
+      return res.status(400).json({ success: false, error: validation.error });
+    }
+    
     const { name, email, password, role = 'patient', username, phone } = req.body;
     
     // 使用 email 或 username 作為用戶 email
