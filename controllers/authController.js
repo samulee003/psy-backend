@@ -72,10 +72,12 @@ const register = (db) => async (req, res) => {
           res.cookie('token', token, {
             httpOnly: true,
             secure: process.env.NODE_ENV === 'production',
-            maxAge: 24 * 60 * 60 * 1000 // 24小時
+            maxAge: 24 * 60 * 60 * 1000, // 24小時
+            sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax', // 允許跨站點使用
+            path: '/' // 確保整個網站都能訪問 cookie
           });
 
-          // 回傳成功信息
+          // 回傳成功信息，添加token到回應中，讓前端可以存入localStorage
           res.status(201).json({
             message: '註冊成功',
             user: {
@@ -84,7 +86,8 @@ const register = (db) => async (req, res) => {
               email: userEmail,
               role,
               phone: phone || null
-            }
+            },
+            token: token // 添加token到回應中
           });
         });
       } catch (err) {
