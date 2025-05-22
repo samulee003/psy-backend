@@ -19,22 +19,32 @@ const register = (db) => async (req, res) => {
     // 驗證必填欄位
     if (!name || !userEmail || !password) {
       console.log('[Auth] 註冊錯誤: 缺少必填欄位');
-      return res.status(400).json({ error: '姓名、電子郵件和密碼都是必填的' });
+      return res.status(400).json({ success: false, error: '姓名、電子郵件和密碼都是必填的' });
     }
 
-    // 檢查郵箱是否已經註冊 - 修改: 同時檢查email和username欄位
+    // 檢查郵箱是否已經註冊 - 修改: 更明確地檢查email和username欄位
     const checkQuery = 'SELECT * FROM users WHERE email = ? OR username = ?';
     console.log('[Auth] 執行重複用戶檢查:', checkQuery, [userEmail, userEmail]);
     
     db.get(checkQuery, [userEmail, userEmail], async (err, user) => {
       if (err) {
         console.error('[Auth] 查詢用戶時發生錯誤:', err.message);
-        return res.status(500).json({ error: '伺服器錯誤' });
+        return res.status(500).json({ success: false, error: '伺服器錯誤' });
       }
 
       if (user) {
+        // 更詳細的日誌，顯示哪個字段匹配
+        if (user.email === userEmail) {
+          console.log('[Auth] 註冊錯誤: 電子郵件已存在', user.email);
+          return res.status(400).json({ success: false, error: '此電子郵件已被註冊' });
+        }
+        if (user.username === userEmail) {
+          console.log('[Auth] 註冊錯誤: 用戶名已存在', user.username);
+          return res.status(400).json({ success: false, error: '此用戶名已被註冊' });
+        }
+        
         console.log('[Auth] 註冊錯誤: 用戶已存在', user);
-        return res.status(400).json({ error: '此電子郵件或用戶名已被註冊' });
+        return res.status(400).json({ success: false, error: '此電子郵件或用戶名已被註冊' });
       }
 
       try {
@@ -67,7 +77,19 @@ const register = (db) => async (req, res) => {
         db.run(query, values, function(err) {
           if (err) {
             console.error('[Auth] 創建用戶時發生錯誤:', err.message);
-            return res.status(500).json({ error: '無法創建用戶' });
+            
+            // 檢查是否為唯一性約束錯誤
+            if (err.message.includes('UNIQUE constraint failed')) {
+              if (err.message.includes('users.email')) {
+                return res.status(400).json({ success: false, error: '此電子郵件已被註冊' });
+              }
+              if (err.message.includes('users.username')) {
+                return res.status(400).json({ success: false, error: '此用戶名已被註冊' });
+              }
+              return res.status(400).json({ success: false, error: '此電子郵件或用戶名已被註冊' });
+            }
+            
+            return res.status(500).json({ success: false, error: '無法創建用戶' });
           }
 
           console.log('[Auth] 用戶創建成功, ID:', this.lastID);
@@ -109,12 +131,12 @@ const register = (db) => async (req, res) => {
         });
       } catch (err) {
         console.error('[Auth] 密碼加密錯誤:', err.message);
-        res.status(500).json({ error: '註冊過程中發生錯誤' });
+        res.status(500).json({ success: false, error: '註冊過程中發生錯誤' });
       }
     });
   } catch (error) {
     console.error('[Auth] 註冊過程中發生錯誤:', error.message);
-    res.status(500).json({ error: '註冊失敗，請稍後再試' });
+    res.status(500).json({ success: false, error: '註冊失敗，請稍後再試' });
   }
 };
 
@@ -129,18 +151,18 @@ const login = (db) => async (req, res) => {
 
     // 驗證必填欄位
     if (!userEmail || !password) {
-      return res.status(400).json({ error: '電子郵件和密碼都是必填的' });
+      return res.status(400).json({ success: false, error: '電子郵件和密碼都是必填的' });
     }
 
     // 查詢用戶
-    db.get('SELECT * FROM users WHERE email = ?', [userEmail], async (err, user) => {
+    db.get('SELECT * FROM users WHERE email = ? OR username = ?', [userEmail, userEmail], async (err, user) => {
       if (err) {
         console.error('查詢用戶時發生錯誤:', err.message);
-        return res.status(500).json({ error: '伺服器錯誤' });
+        return res.status(500).json({ success: false, error: '伺服器錯誤' });
       }
 
       if (!user) {
-        return res.status(401).json({ error: '無效的電子郵件或密碼' });
+        return res.status(401).json({ success: false, error: '無效的電子郵件或密碼' });
       }
 
       try {
@@ -148,7 +170,7 @@ const login = (db) => async (req, res) => {
         const match = await bcrypt.compare(password, user.password);
         
         if (!match) {
-          return res.status(401).json({ error: '無效的電子郵件或密碼' });
+          return res.status(401).json({ success: false, error: '無效的電子郵件或密碼' });
         }
 
         // 生成JWT令牌
@@ -186,12 +208,12 @@ const login = (db) => async (req, res) => {
         });
       } catch (error) {
         console.error('密碼驗證錯誤:', error.message);
-        res.status(500).json({ error: '登入過程中發生錯誤' });
+        res.status(500).json({ success: false, error: '登入過程中發生錯誤' });
       }
     });
   } catch (error) {
     console.error('登入過程中發生錯誤:', error.message);
-    res.status(500).json({ error: '登入失敗，請稍後再試' });
+    res.status(500).json({ success: false, error: '登入失敗，請稍後再試' });
   }
 };
 
@@ -209,18 +231,25 @@ const logout = (req, res) => {
   console.log('[Auth] 清除 cookie 選項:', JSON.stringify(cookieOptions));
   res.clearCookie('token', cookieOptions);
   
-  res.json({ 
+  res.json({
     success: true,
-    message: '已成功登出' 
+    message: '已成功登出'
   });
 };
 
-// 獲取當前用戶信息
+// 獲取當前用戶
 const getCurrentUser = (req, res) => {
-  console.log('[Auth] 處理獲取當前用戶信息請求');
-  // 用戶資訊應該已經在身份驗證中間件中被添加到請求對象 (req.user)
-  if (req.user) {
-    console.log('[Auth] 已找到認證用戶:', req.user.id, req.user.email, req.user.role);
+  try {
+    console.log('[Auth] 獲取當前用戶: ', req.user ? req.user.id : 'No user');
+    
+    if (!req.user) {
+      return res.status(401).json({
+        success: false,
+        error: '未授權，請先登入'
+      });
+    }
+
+    // 注意：我們不回傳密碼
     res.json({
       success: true,
       user: {
@@ -230,13 +259,11 @@ const getCurrentUser = (req, res) => {
         role: req.user.role
       }
     });
-  } else {
-    // 這種情況理論上不應該發生，因為 authenticateUser 中間件會處理未授權的情況
-    // 但作為防禦性程式設計，還是加上
-    console.error('[AuthCtrl] getCurrentUser: req.user 未定義，即使在 authenticateUser 之後');
-    res.status(401).json({ 
+  } catch (error) {
+    console.error('[Auth] 獲取當前用戶時發生錯誤:', error);
+    res.status(500).json({
       success: false,
-      error: '無法獲取用戶信息，請重新登入' 
+      error: '獲取用戶資訊時發生錯誤'
     });
   }
 };
