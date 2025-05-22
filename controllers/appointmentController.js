@@ -3,11 +3,20 @@
  */
 
 const dateUtils = require('../utils/dateUtils');
+const tzUtils = require('../utils/timezone');
+const validators = require('../utils/validators');
 
 // 創建新預約
 const createAppointment = (db) => (req, res) => {
   console.log('[預約日誌] 進入 createAppointment 函數');
   try {
+    // 使用集中式驗證
+    const validation = validators.validateAppointment(req.body);
+    if (!validation.isValid) {
+      console.error('[預約日誌] 驗證錯誤:', validation.error);
+      return res.status(400).json({ success: false, error: validation.error });
+    }
+    
     const { 
       doctorId,          // 保持 doctorId
       patientId,         // 保持 patientId
@@ -16,98 +25,13 @@ const createAppointment = (db) => (req, res) => {
       reason,            // 假設 reason 是主要備註
       notes,             // 也接收 notes，可以選擇性使用或合併
       isNewPatient,      // 從前端接收 isNewPatient
-      patientInfo        // 從前端接收 patientInfo 物件
+      patientInfo,       // 從前端接收 patientInfo 物件
+      timezone           // 新增: 從前端接收時區信息 (可選)
     } = req.body;
 
     // 後端內部變數可以重新映射，或者直接使用接收到的名稱
     // 為了減少後續代碼的改動，我們可以將接收到的值賦給舊的變數名
-    const date = appointmentDate;
-    const time = timeSlot;
-    const note = reason; // 或者 const note = notes; 或者合併它們
-
-    console.log('[預約日誌] 收到的請求體 req.body:', req.body);
-    console.log('[預約日誌] 當前登入用戶 req.user:', req.user);
-
-    // 驗證必填欄位 (使用 date 和 time)
-    if (!doctorId || !patientId || !date || !time) {
-      console.error('[預約日誌] 錯誤：缺少必填欄位', { doctorId, patientId, appointmentDate: date, timeSlot: time });
-      // 注意錯誤訊息中仍然使用 appointmentDate 和 timeSlot，以保持與前端的術語一致
-      return res.status(400).json({ error: '醫生ID、患者ID、預約日期和時間段都是必填的' });
-    }
-    
-    // 驗證日期格式
-    if (!dateUtils.isValidDateFormat(date)) {
-      console.error('[預約日誌] 錯誤：日期格式不正確', { appointmentDate: date });
-      return res.status(400).json({ error: '預約日期格式不正確，應為 YYYY-MM-DD' });
-    }
-
-    // 檢查時間段格式是否正確
-    if (!dateUtils.isValidTimeSlotFormat(time)) {
-      console.error('[預約日誌] 錯誤：時間段格式不正確', { timeSlot: time });
-      return res.status(400).json({ error: '時間段格式不正確，應為 HH:MM（MM 為 00 或 30）' });
-    }
-
-    // 檢查預約時間是否為過去時間
-    if (dateUtils.isPastDateTime(date, time)) {
-      console.error('[預約日誌] 錯誤：不能預約過去的時間', { 
-        appointmentDate: date, 
-        timeSlot: time,
-        currentTime: new Date().toISOString() 
-      });
-      return res.status(400).json({ error: '不能預約過去的時間' });
-    }
-    
-    // 驗證 patientInfo 格式 (如果提供了)
-    if (isNewPatient && patientInfo) {
-      console.log('[預約日誌] 驗證 patientInfo:', patientInfo);
-      
-      // 必填欄位檢查
-      const requiredFields = ['phone'];
-      for (const field of requiredFields) {
-        if (!patientInfo[field]) {
-          console.error(`[預約日誌] 錯誤：patientInfo 缺少必填欄位 ${field}`);
-          return res.status(400).json({ error: `患者資料缺少必填欄位: ${field}` });
-        }
-      }
-      
-      // 電話格式驗證
-      const phonePattern = /^\d{8,15}$/; // 假設電話號碼應該是 8-15 位數字
-      if (patientInfo.phone && !phonePattern.test(patientInfo.phone)) {
-        console.error('[預約日誌] 錯誤：電話號碼格式不正確', { phone: patientInfo.phone });
-        return res.status(400).json({ error: '電話號碼格式不正確，應為 8-15 位數字' });
-      }
-      
-      // 電子郵件格式驗證 (如果提供)
-      if (patientInfo.email) {
-        const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-        if (!emailPattern.test(patientInfo.email)) {
-          console.error('[預約日誌] 錯誤：電子郵件格式不正確', { email: patientInfo.email });
-          return res.status(400).json({ error: '電子郵件格式不正確' });
-        }
-      }
-      
-      // 生日格式驗證 (如果提供)
-      if (patientInfo.birthDate) {
-        if (!dateUtils.isValidDateFormat(patientInfo.birthDate)) {
-          console.error('[預約日誌] 錯誤：生日格式不正確', { birthDate: patientInfo.birthDate });
-          return res.status(400).json({ error: '生日格式不正確，應為 YYYY-MM-DD' });
-        }
-        
-        // 檢查生日是否為未來日期
-        const now = new Date();
-        const birthDate = new Date(patientInfo.birthDate);
-        if (birthDate > now) {
-          console.error('[預約日誌] 錯誤：生日不能是未來日期', { birthDate: patientInfo.birthDate });
-          return res.status(400).json({ error: '生日不能是未來日期' });
-        }
-      }
-      
-      // 性別驗證 (如果提供)
-      if (patientInfo.gender && !['male', 'female', 'other'].includes(patientInfo.gender)) {
-        console.error('[預約日誌] 錯誤：性別格式不正確', { gender: patientInfo.gender });
-        return res.status(400).json({ error: '性別格式不正確，應為 male、female 或 other' });
-      }
-    }
+        const date = appointmentDate;    const time = timeSlot;    const note = reason; // 或者 const note = notes; 或者合併它們    const clientTimezone = timezone || tzUtils.DEFAULT_TIMEZONE;    console.log('[預約日誌] 收到的請求體 req.body:', req.body);    console.log('[預約日誌] 當前登入用戶 req.user:', req.user);    console.log('[預約日誌] 使用時區:', clientTimezone);        // 將本地時間轉換為 UTC 格式存儲    const utcDateTime = tzUtils.localToUTC(date, time, clientTimezone);    console.log('[預約日誌] 本地時間轉換為 UTC:', { localDate: date, localTime: time, utcDateTime });
 
     // 檢查該醫生在該時間段是否已經有預約
     const checkQuery = `
@@ -119,13 +43,13 @@ const createAppointment = (db) => (req, res) => {
     db.get(checkQuery, [doctorId, date, time], (err, existingAppointment) => {
       if (err) {
         console.error('[預約日誌] 預約衝突檢查SQL錯誤:', err.message);
-        return res.status(500).json({ error: '伺服器錯誤' });
+        return res.status(500).json({ success: false, error: '伺服器錯誤' });
       }
       console.log('[預約日誌] 預約衝突檢查結果 (existingAppointment):', existingAppointment);
 
       if (existingAppointment) {
         console.warn('[預約日誌] 警告：該時間段已被預約', existingAppointment);
-        return res.status(409).json({ error: '該時間段已被預約' });
+        return res.status(409).json({ success: false, error: '該時間段已被預約' });
       }
 
       // 查詢醫生表，檢查醫生是否存在
@@ -133,20 +57,20 @@ const createAppointment = (db) => (req, res) => {
       db.get('SELECT * FROM users WHERE id = ? AND role = "doctor"', [doctorId], (err, doctor) => {
         if (err) {
           console.error('[預約日誌] 查詢醫生SQL錯誤:', err.message);
-          return res.status(500).json({ error: '伺服器錯誤' });
+          return res.status(500).json({ success: false, error: '伺服器錯誤' });
         }
         console.log('[預約日誌] 查詢醫生結果 (doctor):', doctor);
 
         if (!doctor) {
           console.warn('[預約日誌] 警告：醫生不存在', { doctorId });
-          return res.status(404).json({ error: '醫生不存在' });
+          return res.status(404).json({ success: false, error: '醫生不存在' });
         }
 
         // 如果當前用戶是患者，則只能以自己的身份預約
         console.log('[預約日誌] 檢查患者身份，當前用戶角色:', req.user.role, '用戶ID:', req.user.id, '請求的patientId:', patientId);
         if (req.user.role === 'patient' && req.user.id !== parseInt(patientId)) {
           console.warn('[預約日誌] 警告：患者只能以自己的身份預約', { userId: req.user.id, requestedPatientId: patientId });
-          return res.status(403).json({ error: '患者只能以自己的身份預約' });
+          return res.status(403).json({ success: false, error: '患者只能以自己的身份預約' });
         }
 
         // 查詢患者表，檢查患者是否存在
@@ -154,13 +78,13 @@ const createAppointment = (db) => (req, res) => {
         db.get('SELECT * FROM users WHERE id = ?', [patientId], (err, patient) => {
           if (err) {
             console.error('[預約日誌] 查詢患者SQL錯誤:', err.message);
-            return res.status(500).json({ error: '伺服器錯誤' });
+            return res.status(500).json({ success: false, error: '伺服器錯誤' });
           }
           console.log('[預約日誌] 查詢患者結果 (patient):', patient);
 
           if (!patient) {
             console.warn('[預約日誌] 警告：患者不存在', { patientId });
-            return res.status(404).json({ error: '患者不存在' });
+            return res.status(404).json({ success: false, error: '患者不存在' });
           }
 
           // 如果 isNewPatient 為 true，則使用 patientInfo 中的數據創建新用戶或更新用戶資訊
@@ -171,13 +95,19 @@ const createAppointment = (db) => (req, res) => {
             // 或者如果是全新患者且 patientId 此時是無效的，則需要先創建 user 記錄。這取決於您的 patientId 生成和管理流程。
           }
 
+          // 從 UTC 日期時間中提取日期和時間部分用於存儲
+          // 這是過渡階段的處理方式，未來可以修改數據庫模式直接存儲 ISO 格式
+          const { date: utcDate, time: utcTime } = tzUtils.utcToLocal(utcDateTime, 'UTC');
+          console.log('[預約日誌] 用於存儲的 UTC 日期和時間:', { utcDate, utcTime });
+
           // 創建預約
           const createQuery = `
             INSERT INTO appointments (
-              doctor_id, patient_id, date, time, notes, status, created_at
-            ) VALUES (?, ?, ?, ?, ?, ?, datetime('now'))
+              doctor_id, patient_id, date, time, notes, status, created_at, 
+              utc_datetime
+            ) VALUES (?, ?, ?, ?, ?, ?, datetime('now'), ?)
           `;
-          const params = [doctorId, patientId, date, time, note || '', 'pending'];
+          const params = [doctorId, patientId, utcDate, utcTime, note || '', 'pending', utcDateTime];
           console.log('[預約日誌] 準備執行創建預約SQL:', createQuery, '參數:', params);
 
           db.run(
@@ -186,7 +116,7 @@ const createAppointment = (db) => (req, res) => {
             function(err) {
               if (err) {
                 console.error('[預約日誌] 創建預約SQL錯誤:', err.message);
-                return res.status(500).json({ error: '無法創建預約' });
+                return res.status(500).json({ success: false, error: '無法創建預約' });
               }
               console.log('[預約日誌] 創建預約成功 (pending)，影響行數:', this.changes, '最後插入ID:', this.lastID);
               
@@ -198,45 +128,58 @@ const createAppointment = (db) => (req, res) => {
                 SET status = 'confirmed'
                 WHERE id = ?
               `;
-              db.run(updateConfirmQuery, [newAppointmentId], (updateErr) => {
-                if (updateErr) {
-                  console.error('[預約日誌] 自動確認預約狀態SQL錯誤:', updateErr.message);
-                  // 即使自動確認失敗，也繼續嘗試獲取並返回預約信息 (狀態仍為 pending)
-                } else {
-                  console.log('[預約日誌] 預約已自動確認，ID:', newAppointmentId);
+
+              db.run(updateConfirmQuery, [newAppointmentId], function(err) {
+                if (err) {
+                  console.error('[預約日誌] 更新預約狀態為confirmed時出錯:', err.message);
+                  // 雖然狀態更新失敗，但預約已創建，所以仍然返回成功，但包含警告
+                  return res.status(201).json({
+                    success: true,
+                    appointment: {
+                      id: newAppointmentId,
+                      doctorId,
+                      patientId,
+                      date,
+                      time,
+                      status: 'pending', // 由於更新失敗，仍為 pending
+                      notes: note || ''
+                    },
+                    warning: '預約已創建但狀態更新失敗，仍為 pending'
+                  });
                 }
 
-                // 無論自動確認是否成功，都繼續獲取剛創建/更新的預約
-                console.log('[預約日誌] 準備獲取剛創建/更新的預約，ID:', newAppointmentId);
-                db.get('SELECT * FROM appointments WHERE id = ?', [newAppointmentId], (err, finalAppointment) => {
-                  if (err) {
-                    console.error('[預約日誌] 獲取新預約SQL錯誤:', err.message);
-                    return res.status(500).json({ 
-                      message: '預約已創建但獲取詳細信息失敗',
-                      appointmentId: newAppointmentId
-                    });
-                  }
-                  console.log('[預約日誌] 成功獲取新預約 (狀態應為 confirmed 或 pending):', finalAppointment);
-
-                  // 根據實際的最終狀態調整 message
-                  const message = finalAppointment && finalAppointment.status === 'confirmed' 
-                                  ? '預約已成功創建並自動確認' 
-                                  : '預約已成功創建，等待確認';
-                  res.status(201).json({
-                    message,
-                    appointment: finalAppointment
-                  });
+                console.log('[預約日誌] 預約狀態更新為confirmed成功');
+                // 轉換回客戶端的本地時間格式
+                const localDateTime = tzUtils.utcToLocal(utcDateTime, clientTimezone);
+                
+                // 返回成功響應，包含預約 ID
+                res.status(201).json({
+                  success: true,
+                  appointment: {
+                    id: newAppointmentId,
+                    doctorId,
+                    patientId,
+                    date: localDateTime.date,
+                    time: localDateTime.time,
+                    status: 'confirmed',
+                    notes: note || '',
+                    formattedDateTime: localDateTime.formattedDateTime
+                  },
+                  message: '預約創建成功'
                 });
               });
-              // --- 新增邏輯結束 ---
             }
           );
         });
       });
     });
   } catch (error) {
-    console.error('[預約日誌] 創建預約過程中發生頂層錯誤:', error.message, '堆疊:', error.stack);
-    res.status(500).json({ error: '創建預約失敗，請稍後再試' });
+    console.error('[預約日誌] 創建預約時發生未處理的錯誤:', error);
+    res.status(500).json({
+      success: false,
+      error: '創建預約時發生未知錯誤',
+      details: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
   }
 };
 
