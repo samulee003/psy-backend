@@ -14,8 +14,13 @@ const authenticateUser = (req, res, next) => {
   console.log('[Auth] Cookies:', req.cookies);
   console.log('[Auth] Authorization頭:', req.headers['authorization']);
   
-  // 從請求中獲取令牌
-  const token = req.cookies.token || req.headers['authorization']?.split(' ')[1];
+  // 從請求中獲取令牌 - 修改：嘗試從不同來源獲取token
+  // 1. 從cookie獲取
+  // 2. 從Authorization頭獲取
+  // 3. 從query參數獲取（用於開發或特殊情況）
+  const token = req.cookies.token || 
+                req.headers['authorization']?.split(' ')[1] || 
+                req.query.token;
 
   console.log('[Auth] 提取的Token:', token ? `${token.substring(0, 10)}...` : 'undefined');
 
@@ -45,7 +50,9 @@ const authenticateUser = (req, res, next) => {
 
 // 添加一個不驗證但附加 user 的中間件，用於非必須登入的 API
 const optionalAuthentication = (req, res, next) => {
-  const token = req.cookies.token || req.headers['authorization']?.split(' ')[1];
+  const token = req.cookies.token || 
+                req.headers['authorization']?.split(' ')[1] || 
+                req.query.token;
   
   if (!token) {
     return next(); // 繼續處理，但不設置 req.user

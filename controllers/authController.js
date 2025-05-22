@@ -140,7 +140,7 @@ const login = (db) => async (req, res) => {
 
         console.log('[Auth] 登入成功，設置 Cookie:', user.id, user.email, user.role);
 
-        // 設置cookie 
+        // 設置cookie，並調整SameSite和Secure選項以支持跨域請求
         // 修改：在生產環境中使用更安全的設置
         res.cookie('token', token, {
           httpOnly: true,
@@ -150,7 +150,7 @@ const login = (db) => async (req, res) => {
           path: '/' // 確保整個網站都能訪問 cookie
         });
 
-        // 回傳成功信息
+        // 回傳成功信息，包括token用於前端存儲
         res.json({
           message: '登入成功',
           user: {
@@ -158,7 +158,8 @@ const login = (db) => async (req, res) => {
             name: user.name,
             email: user.email,
             role: user.role
-          }
+          },
+          token: token // 添加token到回應中，讓前端可以存入localStorage
         });
       } catch (error) {
         console.error('密碼驗證錯誤:', error.message);
