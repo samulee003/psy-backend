@@ -2,6 +2,8 @@
  * 預約管理控制器
  */
 
+const dateUtils = require('../utils/dateUtils');
+
 // 創建新預約
 const createAppointment = (db) => (req, res) => {
   console.log('[預約日誌] 進入 createAppointment 函數');
@@ -32,12 +34,79 @@ const createAppointment = (db) => (req, res) => {
       // 注意錯誤訊息中仍然使用 appointmentDate 和 timeSlot，以保持與前端的術語一致
       return res.status(400).json({ error: '醫生ID、患者ID、預約日期和時間段都是必填的' });
     }
+    
+    // 驗證日期格式
+    if (!dateUtils.isValidDateFormat(date)) {
+      console.error('[預約日誌] 錯誤：日期格式不正確', { appointmentDate: date });
+      return res.status(400).json({ error: '預約日期格式不正確，應為 YYYY-MM-DD' });
+    }
 
     // 檢查時間段格式是否正確
-    const timeSlotPattern = /^([01]?[0-9]|2[0-3]):(00|30)$/;
-    if (!timeSlotPattern.test(time)) {
+    if (!dateUtils.isValidTimeSlotFormat(time)) {
       console.error('[預約日誌] 錯誤：時間段格式不正確', { timeSlot: time });
       return res.status(400).json({ error: '時間段格式不正確，應為 HH:MM（MM 為 00 或 30）' });
+    }
+
+    // 檢查預約時間是否為過去時間
+    if (dateUtils.isPastDateTime(date, time)) {
+      console.error('[預約日誌] 錯誤：不能預約過去的時間', { 
+        appointmentDate: date, 
+        timeSlot: time,
+        currentTime: new Date().toISOString() 
+      });
+      return res.status(400).json({ error: '不能預約過去的時間' });
+    }
+    
+    // 驗證 patientInfo 格式 (如果提供了)
+    if (isNewPatient && patientInfo) {
+      console.log('[預約日誌] 驗證 patientInfo:', patientInfo);
+      
+      // 必填欄位檢查
+      const requiredFields = ['phone'];
+      for (const field of requiredFields) {
+        if (!patientInfo[field]) {
+          console.error(`[預約日誌] 錯誤：patientInfo 缺少必填欄位 ${field}`);
+          return res.status(400).json({ error: `患者資料缺少必填欄位: ${field}` });
+        }
+      }
+      
+      // 電話格式驗證
+      const phonePattern = /^\d{8,15}$/; // 假設電話號碼應該是 8-15 位數字
+      if (patientInfo.phone && !phonePattern.test(patientInfo.phone)) {
+        console.error('[預約日誌] 錯誤：電話號碼格式不正確', { phone: patientInfo.phone });
+        return res.status(400).json({ error: '電話號碼格式不正確，應為 8-15 位數字' });
+      }
+      
+      // 電子郵件格式驗證 (如果提供)
+      if (patientInfo.email) {
+        const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+        if (!emailPattern.test(patientInfo.email)) {
+          console.error('[預約日誌] 錯誤：電子郵件格式不正確', { email: patientInfo.email });
+          return res.status(400).json({ error: '電子郵件格式不正確' });
+        }
+      }
+      
+      // 生日格式驗證 (如果提供)
+      if (patientInfo.birthDate) {
+        if (!dateUtils.isValidDateFormat(patientInfo.birthDate)) {
+          console.error('[預約日誌] 錯誤：生日格式不正確', { birthDate: patientInfo.birthDate });
+          return res.status(400).json({ error: '生日格式不正確，應為 YYYY-MM-DD' });
+        }
+        
+        // 檢查生日是否為未來日期
+        const now = new Date();
+        const birthDate = new Date(patientInfo.birthDate);
+        if (birthDate > now) {
+          console.error('[預約日誌] 錯誤：生日不能是未來日期', { birthDate: patientInfo.birthDate });
+          return res.status(400).json({ error: '生日不能是未來日期' });
+        }
+      }
+      
+      // 性別驗證 (如果提供)
+      if (patientInfo.gender && !['male', 'female', 'other'].includes(patientInfo.gender)) {
+        console.error('[預約日誌] 錯誤：性別格式不正確', { gender: patientInfo.gender });
+        return res.status(400).json({ error: '性別格式不正確，應為 male、female 或 other' });
+      }
     }
 
     // 檢查該醫生在該時間段是否已經有預約
