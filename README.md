@@ -19,13 +19,27 @@
    - 增加token獲取方式，除了從Cookie和Authorization頭外，還支持從URL參數獲取
    - 優化了身份驗證失敗時的錯誤訊息
 
-2. **改進登入API回應**：
-   - 登入成功時除了設置Cookie，還在回應中返回token
+2. **改進登入和註冊API回應**：
+   - 登入和註冊成功時除了設置Cookie，還在回應中返回token
    - 這使得前端可以選擇將token存儲在localStorage中，解決跨裝置/無痕模式問題
 
 3. **優化CORS配置**：
    - 設置更完整的CORS屬性，確保跨域請求可以正確傳遞Cookie和Authorization頭
    - 添加額外的允許源和方法
+
+### 患者端和醫生端的共同修復
+
+此修復同時適用於患者端和醫生端，因為兩者共用相同的身份驗證機制。修復後：
+
+1. **患者端功能**：
+   - 患者能夠在任何裝置或無痕模式下正常登入
+   - 能夠查看醫生排班信息
+   - 能夠創建和管理自己的預約
+
+2. **醫生端功能**：
+   - 醫生能夠在任何裝置或無痕模式下正常登入
+   - 能夠管理自己的排班
+   - 能夠查看和管理預約
 
 ### 前端需要做的調整
 
@@ -86,7 +100,33 @@
    };
    ```
 
-3. **登出處理**：
+3. **處理註冊成功**:
+   ```javascript
+   // 註冊成功後，將token存入localStorage
+   const handleRegister = async (userData) => {
+     try {
+       const response = await fetch('/api/auth/register', {
+         method: 'POST',
+         headers: { 'Content-Type': 'application/json' },
+         credentials: 'include',
+         body: JSON.stringify(userData)
+       });
+       
+       const data = await response.json();
+       
+       if (response.ok) {
+         // 存儲token到localStorage
+         localStorage.setItem('authToken', data.token);
+         
+         // 繼續處理註冊成功邏輯...
+       }
+     } catch (error) {
+       console.error('註冊失敗:', error);
+     }
+   };
+   ```
+
+4. **登出處理**：
    ```javascript
    const handleLogout = async () => {
      try {
@@ -111,5 +151,7 @@
 2. 使用無痕模式登入系統，檢查是否能看到排班資訊
 3. 在不同裝置上登入系統，檢查是否能看到排班資訊
 4. 登入後關閉並重新打開瀏覽器，檢查是否仍保持登入狀態
+5. 測試註冊新用戶，確認能正常登入並使用系統功能
+6. 在患者端測試預約功能，確認能正常創建和管理預約
 
 如果您有任何問題或需要進一步的協助，請聯繫系統管理員。 
