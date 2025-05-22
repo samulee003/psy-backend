@@ -36,6 +36,9 @@ module.exports = (db) => {
 
   // 刪除用戶 (僅管理員可訪問)
   router.delete('/:userId', authenticateAdmin, userController.deleteUser);
+  
+  // 級聯刪除用戶及其關聯數據 (僅管理員可訪問)
+  router.delete('/:userId/cascade', authenticateAdmin, userController.deleteUserWithRelatedData);
 
   return router;
 }; 
