@@ -14,20 +14,27 @@ const register = (db) => async (req, res) => {
     // 使用 email 或 username 作為用戶 email
     const userEmail = email || username;
 
+    console.log('[Auth] 開始處理註冊請求:', { name, email: userEmail, role });
+
     // 驗證必填欄位
     if (!name || !userEmail || !password) {
+      console.log('[Auth] 註冊錯誤: 缺少必填欄位');
       return res.status(400).json({ error: '姓名、電子郵件和密碼都是必填的' });
     }
 
-    // 檢查郵箱是否已經註冊
-    db.get('SELECT * FROM users WHERE email = ?', [userEmail], async (err, user) => {
+    // 檢查郵箱是否已經註冊 - 修改: 同時檢查email和username欄位
+    const checkQuery = 'SELECT * FROM users WHERE email = ? OR username = ?';
+    console.log('[Auth] 執行重複用戶檢查:', checkQuery, [userEmail, userEmail]);
+    
+    db.get(checkQuery, [userEmail, userEmail], async (err, user) => {
       if (err) {
-        console.error('查詢用戶時發生錯誤:', err.message);
+        console.error('[Auth] 查詢用戶時發生錯誤:', err.message);
         return res.status(500).json({ error: '伺服器錯誤' });
       }
 
       if (user) {
-        return res.status(400).json({ error: '此電子郵件已被註冊' });
+        console.log('[Auth] 註冊錯誤: 用戶已存在', user);
+        return res.status(400).json({ error: '此電子郵件或用戶名已被註冊' });
       }
 
       try {
@@ -54,12 +61,16 @@ const register = (db) => async (req, res) => {
           VALUES (${placeholders}, datetime('now'))
         `;
         
+        console.log('[Auth] 準備創建新用戶:', { name, email: userEmail, role });
+        
         // 插入新用戶
         db.run(query, values, function(err) {
           if (err) {
-            console.error('創建用戶時發生錯誤:', err.message);
+            console.error('[Auth] 創建用戶時發生錯誤:', err.message);
             return res.status(500).json({ error: '無法創建用戶' });
           }
+
+          console.log('[Auth] 用戶創建成功, ID:', this.lastID);
 
           // 生成JWT令牌
           const token = jwt.sign(
@@ -91,12 +102,12 @@ const register = (db) => async (req, res) => {
           });
         });
       } catch (err) {
-        console.error('密碼加密錯誤:', err.message);
+        console.error('[Auth] 密碼加密錯誤:', err.message);
         res.status(500).json({ error: '註冊過程中發生錯誤' });
       }
     });
   } catch (error) {
-    console.error('註冊過程中發生錯誤:', error.message);
+    console.error('[Auth] 註冊過程中發生錯誤:', error.message);
     res.status(500).json({ error: '註冊失敗，請稍後再試' });
   }
 };
