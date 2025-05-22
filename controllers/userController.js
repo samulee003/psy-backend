@@ -168,6 +168,90 @@ const deleteUser = (db) => (req, res) => {
       return res.status(404).json({ error: '用戶不存在' });
     }
 
+    // 防止刪除最後一個管理員帳戶
+    if (user.role === 'admin') {
+      db.get('SELECT COUNT(*) as count FROM users WHERE role = "admin"', [], (err, result) => {
+        if (err) {
+          console.error('查詢管理員數量錯誤:', err.message);
+          return res.status(500).json({ error: '伺服器錯誤' });
+        }
+
+        if (result.count <= 1) {
+          return res.status(409).json({ 
+            error: '無法刪除最後一個管理員帳戶',
+            canProceed: false,
+            reason: 'last_admin'
+          });
+        } else {
+          // 有多個管理員，可以繼續檢查其他關聯
+          checkRelatedData(user);
+        }
+      });
+    } else {
+      // 非管理員帳戶，直接檢查關聯
+      checkRelatedData(user);
+    }
+  });
+
+  function checkRelatedData(user) {
+    // 根據用戶角色檢查不同的關聯
+    if (user.role === 'doctor') {
+      // 檢查是否存在與該醫生相關的排班
+      db.get('SELECT COUNT(*) as count FROM schedule WHERE doctor_id = ?', [userId], (err, scheduleResult) => {
+        if (err) {
+          console.error('查詢排班錯誤:', err.message);
+          return res.status(500).json({ error: '伺服器錯誤' });
+        }
+
+        // 檢查是否存在與該醫生相關的預約
+        db.get('SELECT COUNT(*) as count FROM appointments WHERE doctor_id = ?', [userId], (err, appointmentResult) => {
+          if (err) {
+            console.error('查詢預約錯誤:', err.message);
+            return res.status(500).json({ error: '伺服器錯誤' });
+          }
+
+          // 如果存在關聯數據，則提示用戶
+          if (scheduleResult.count > 0 || appointmentResult.count > 0) {
+            return res.status(409).json({
+              error: '無法刪除此用戶，因為存在關聯的排班或預約數據',
+              canProceed: false,
+              scheduleCount: scheduleResult.count,
+              appointmentCount: appointmentResult.count,
+              reason: 'has_related_data'
+            });
+          } else {
+            // 沒有關聯數據，可以安全刪除
+            proceedToDelete();
+          }
+        });
+      });
+    } else if (user.role === 'patient') {
+      // 檢查是否存在與該患者相關的預約
+      db.get('SELECT COUNT(*) as count FROM appointments WHERE patient_id = ?', [userId], (err, result) => {
+        if (err) {
+          console.error('查詢預約錯誤:', err.message);
+          return res.status(500).json({ error: '伺服器錯誤' });
+        }
+
+        if (result.count > 0) {
+          return res.status(409).json({
+            error: '無法刪除此用戶，因為存在關聯的預約數據',
+            canProceed: false,
+            appointmentCount: result.count,
+            reason: 'has_related_data'
+          });
+        } else {
+          // 沒有關聯數據，可以安全刪除
+          proceedToDelete();
+        }
+      });
+    } else {
+      // 其他角色，直接刪除
+      proceedToDelete();
+    }
+  }
+
+  function proceedToDelete() {
     // 刪除用戶
     db.run('DELETE FROM users WHERE id = ?', [userId], function(err) {
       if (err) {
@@ -175,9 +259,12 @@ const deleteUser = (db) => (req, res) => {
         return res.status(500).json({ error: '無法刪除用戶' });
       }
 
-      res.json({ message: '用戶已成功刪除' });
+      res.json({ 
+        message: '用戶已成功刪除',
+        canProceed: true
+      });
     });
-  });
+  }
 };
 
 // 獲取醫生列表
@@ -238,10 +325,157 @@ const getDoctors = (db) => (req, res) => {
   });
 };
 
+// 強制刪除用戶及其所有關聯數據
+const deleteUserWithRelatedData = (db) => (req, res) => {
+  const { userId } = req.params;
+  const { confirm, force } = req.body;
+
+  // 安全檢查：必須提供確認標記
+  if (!confirm || confirm !== 'CASCADE_DELETE_CONFIRMED') {
+    return res.status(400).json({ 
+      error: '必須提供明確的確認標記才能執行級聯刪除',
+      canProceed: false
+    });
+  }
+
+  // 檢查用戶是否存在
+  db.get('SELECT * FROM users WHERE id = ?', [userId], (err, user) => {
+    if (err) {
+      console.error('查詢用戶錯誤:', err.message);
+      return res.status(500).json({ error: '伺服器錯誤' });
+    }
+
+    if (!user) {
+      return res.status(404).json({ error: '用戶不存在' });
+    }
+
+    // 防止刪除最後一個管理員帳戶
+    if (user.role === 'admin') {
+      db.get('SELECT COUNT(*) as count FROM users WHERE role = "admin"', [], (err, result) => {
+        if (err) {
+          console.error('查詢管理員數量錯誤:', err.message);
+          return res.status(500).json({ error: '伺服器錯誤' });
+        }
+
+        if (result.count <= 1) {
+          return res.status(409).json({ 
+            error: '無法刪除最後一個管理員帳戶，即使使用級聯刪除',
+            canProceed: false,
+            reason: 'last_admin'
+          });
+        } else {
+          // 有多個管理員，可以繼續刪除
+          beginCascadeDelete(user);
+        }
+      });
+    } else {
+      // 非管理員帳戶，直接開始級聯刪除
+      beginCascadeDelete(user);
+    }
+  });
+
+  function beginCascadeDelete(user) {
+    console.log(`開始級聯刪除用戶 ID ${userId} (${user.name}, 角色: ${user.role})`);
+    
+    // 啟動資料庫事務以確保原子性
+    db.run('BEGIN TRANSACTION', (err) => {
+      if (err) {
+        console.error('開始事務錯誤:', err.message);
+        return res.status(500).json({ error: '無法啟動刪除事務' });
+      }
+
+      const operations = [];
+      const results = { deleted: {} };
+
+      // 根據用戶角色添加不同的刪除操作
+      if (user.role === 'doctor') {
+        // 1. 刪除與該醫生相關的排班
+        operations.push(new Promise((resolve, reject) => {
+          db.run('DELETE FROM schedule WHERE doctor_id = ?', [userId], function(err) {
+            if (err) {
+              console.error('刪除醫生排班錯誤:', err.message);
+              return reject(err);
+            }
+            results.deleted.schedules = this.changes;
+            resolve();
+          });
+        }));
+
+        // 2. 刪除與該醫生相關的預約
+        operations.push(new Promise((resolve, reject) => {
+          db.run('DELETE FROM appointments WHERE doctor_id = ?', [userId], function(err) {
+            if (err) {
+              console.error('刪除醫生預約錯誤:', err.message);
+              return reject(err);
+            }
+            results.deleted.doctorAppointments = this.changes;
+            resolve();
+          });
+        }));
+      } else if (user.role === 'patient') {
+        // 刪除與該患者相關的預約
+        operations.push(new Promise((resolve, reject) => {
+          db.run('DELETE FROM appointments WHERE patient_id = ?', [userId], function(err) {
+            if (err) {
+              console.error('刪除患者預約錯誤:', err.message);
+              return reject(err);
+            }
+            results.deleted.patientAppointments = this.changes;
+            resolve();
+          });
+        }));
+      }
+
+      // 執行所有刪除操作
+      Promise.all(operations)
+        .then(() => {
+          // 最後刪除用戶本身
+          db.run('DELETE FROM users WHERE id = ?', [userId], function(err) {
+            if (err) {
+              console.error('刪除用戶錯誤:', err.message);
+              db.run('ROLLBACK', () => {
+                return res.status(500).json({ error: '刪除用戶失敗，已回滾所有更改' });
+              });
+              return;
+            }
+
+            results.deleted.user = this.changes;
+
+            // 提交事務
+            db.run('COMMIT', (err) => {
+              if (err) {
+                console.error('提交事務錯誤:', err.message);
+                db.run('ROLLBACK', () => {
+                  return res.status(500).json({ error: '提交刪除事務失敗，已回滾所有更改' });
+                });
+                return;
+              }
+
+              console.log(`級聯刪除用戶 ID ${userId} 成功完成`, results);
+              res.json({
+                message: '用戶及其關聯數據已成功刪除',
+                results: results,
+                canProceed: true
+              });
+            });
+          });
+        })
+        .catch(err => {
+          console.error('級聯刪除操作錯誤:', err.message);
+          db.run('ROLLBACK', () => {
+            return res.status(500).json({ error: '刪除關聯數據失敗，已回滾所有更改' });
+          });
+        });
+    });
+  }
+};
+
+// 最終的模組導出，必須放在最後
 module.exports = (db) => ({
   getAllUsers: getAllUsers(db),
   getUserById: getUserById(db),
   updateUser: updateUser(db),
   deleteUser: deleteUser(db),
-  getDoctors: getDoctors(db)
+  getDoctors: getDoctors(db),
+  deleteUserWithRelatedData: deleteUserWithRelatedData(db)
 }); 
