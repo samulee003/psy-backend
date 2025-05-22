@@ -50,7 +50,7 @@ const authenticateUser = (req, res, next) => {
   // 如果沒有令牌，返回未授權錯誤
   if (!token) {
     console.log('[Auth] 未找到有效的身份令牌');
-    return res.status(401).json({ error: '需要登入才能訪問' });
+    return res.status(401).json({ success: false, error: '需要登入才能訪問' });
   }
 
   try {
@@ -64,10 +64,10 @@ const authenticateUser = (req, res, next) => {
     
     // 如果是令牌過期，提供更具體的錯誤訊息
     if (error.name === 'TokenExpiredError') {
-      return res.status(401).json({ error: '登入已過期，請重新登入' });
+      return res.status(401).json({ success: false, error: '登入已過期，請重新登入' });
     }
     
-    return res.status(401).json({ error: '無效的登入憑證，請重新登入' });
+    return res.status(401).json({ success: false, error: '無效的登入憑證，請重新登入' });
   }
 };
 
@@ -123,7 +123,7 @@ const authenticateAdmin = (req, res, next) => {
     if (req.user.role === 'admin') {
       next();
     } else {
-      res.status(403).json({ error: '需要管理員權限才能訪問' });
+      res.status(403).json({ success: false, error: '需要管理員權限才能訪問' });
     }
   });
 };
@@ -136,7 +136,7 @@ const authenticateDoctor = (req, res, next) => {
     if (req.user.role === 'doctor' || req.user.role === 'admin') {
       next();
     } else {
-      res.status(403).json({ error: '需要醫生權限才能訪問' });
+      res.status(403).json({ success: false, error: '需要醫生權限才能訪問' });
     }
   });
 };
@@ -149,7 +149,7 @@ const authenticatePatient = (req, res, next) => {
     if (req.user.role === 'patient' || req.user.role === 'admin') {
       next();
     } else {
-      res.status(403).json({ error: '需要患者權限才能訪問' });
+      res.status(403).json({ success: false, error: '需要患者權限才能訪問' });
     }
   });
 };
