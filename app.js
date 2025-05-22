@@ -34,21 +34,7 @@ console.log('[APP] 資料庫連接已初始化 (等待實際連接結果)');
 // --- 基本中間件 ---
 console.log('[APP] 準備註冊 CORS 中間件...');
 app.use(cors({
-  origin: function(origin, callback) {
-    const allowedOrigins = [
-      'http://localhost:3000', 
-      'https://therapy-booking.zeabur.app',
-      'http://localhost:5000'  // 添加本地開發用的後端地址
-    ];
-    // 允許沒有來源的請求（例如移動應用或 Postman）
-    if (!origin) return callback(null, true);
-    if (allowedOrigins.indexOf(origin) !== -1 || process.env.CORS_ORIGIN === origin) {
-      callback(null, true);
-    } else {
-      console.log(`CORS 拒絕來源: ${origin}`);
-      callback(new Error('不允許的來源'));
-    }
-  },
+  origin: true, // 允許所有來源請求，更適合在生產環境中
   credentials: true, // 允許跨域傳遞cookie
   optionsSuccessStatus: 200,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],

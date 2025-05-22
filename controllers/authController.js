@@ -79,17 +79,23 @@ const register = (db) => async (req, res) => {
             { expiresIn: '24h' }
           );
 
-          // 設置cookie
-          res.cookie('token', token, {
+          console.log('[Auth] 用戶註冊成功，設置 Cookie:', this.lastID, userEmail, role);
+
+          // 更安全的 cookie 設置
+          const cookieOptions = {
             httpOnly: true,
             secure: process.env.NODE_ENV === 'production',
             maxAge: 24 * 60 * 60 * 1000, // 24小時
-            sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax', // 允許跨站點使用
+            sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
             path: '/' // 確保整個網站都能訪問 cookie
-          });
+          };
+          
+          console.log('[Auth] 設置 cookie 選項:', JSON.stringify(cookieOptions));
+          res.cookie('token', token, cookieOptions);
 
           // 回傳成功信息，添加token到回應中，讓前端可以存入localStorage
           res.status(201).json({
+            success: true,
             message: '註冊成功',
             user: {
               id: this.lastID,
@@ -98,7 +104,7 @@ const register = (db) => async (req, res) => {
               role,
               phone: phone || null
             },
-            token: token // 添加token到回應中
+            token: token // 明確提供 token 供前端存儲在 localStorage
           });
         });
       } catch (err) {
@@ -154,18 +160,21 @@ const login = (db) => async (req, res) => {
 
         console.log('[Auth] 登入成功，設置 Cookie:', user.id, user.email, user.role);
 
-        // 設置cookie，並調整SameSite和Secure選項以支持跨域請求
-        // 修改：在生產環境中使用更安全的設置
-        res.cookie('token', token, {
+        // 更安全的 cookie 設置
+        const cookieOptions = {
           httpOnly: true,
-          secure: process.env.NODE_ENV === 'production',
+          secure: process.env.NODE_ENV === 'production', // 在生產環境中必須為 true
           maxAge: 24 * 60 * 60 * 1000, // 24小時
-          sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax', // 允許跨站點使用
+          sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax', // 生產環境使用 none 以支持跨站點
           path: '/' // 確保整個網站都能訪問 cookie
-        });
+        };
+        
+        console.log('[Auth] 設置 cookie 選項:', JSON.stringify(cookieOptions));
+        res.cookie('token', token, cookieOptions);
 
         // 回傳成功信息，包括token用於前端存儲
         res.json({
+          success: true,
           message: '登入成功',
           user: {
             id: user.id,
@@ -173,7 +182,7 @@ const login = (db) => async (req, res) => {
             email: user.email,
             role: user.role
           },
-          token: token // 添加token到回應中，讓前端可以存入localStorage
+          token: token // 明確提供 token 供前端存儲在 localStorage
         });
       } catch (error) {
         console.error('密碼驗證錯誤:', error.message);
@@ -189,13 +198,21 @@ const login = (db) => async (req, res) => {
 // 登出
 const logout = (req, res) => {
   console.log('[Auth] 處理登出請求');
-  res.clearCookie('token', { 
+  
+  const cookieOptions = {
     path: '/',
     httpOnly: true,
     secure: process.env.NODE_ENV === 'production',
     sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax'
+  };
+  
+  console.log('[Auth] 清除 cookie 選項:', JSON.stringify(cookieOptions));
+  res.clearCookie('token', cookieOptions);
+  
+  res.json({ 
+    success: true,
+    message: '已成功登出' 
   });
-  res.json({ message: '已成功登出' });
 };
 
 // 獲取當前用戶信息
@@ -205,6 +222,7 @@ const getCurrentUser = (req, res) => {
   if (req.user) {
     console.log('[Auth] 已找到認證用戶:', req.user.id, req.user.email, req.user.role);
     res.json({
+      success: true,
       user: {
         id: req.user.id,
         name: req.user.name,
@@ -216,7 +234,10 @@ const getCurrentUser = (req, res) => {
     // 這種情況理論上不應該發生，因為 authenticateUser 中間件會處理未授權的情況
     // 但作為防禦性程式設計，還是加上
     console.error('[AuthCtrl] getCurrentUser: req.user 未定義，即使在 authenticateUser 之後');
-    res.status(401).json({ error: '無法獲取用戶信息，請重新登入' });
+    res.status(401).json({ 
+      success: false,
+      error: '無法獲取用戶信息，請重新登入' 
+    });
   }
 };
 
