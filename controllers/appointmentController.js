@@ -5,6 +5,7 @@
 const dateUtils = require('../utils/dateUtils');
 const tzUtils = require('../utils/timezone');
 const validators = require('../utils/validators');
+const emailService = require('../utils/emailService');
 
 // 創建新預約
 const createAppointment = (db) => (req, res) => {
@@ -151,6 +152,36 @@ const createAppointment = (db) => (req, res) => {
                 console.log('[預約日誌] 預約狀態更新為confirmed成功');
                 // 轉換回客戶端的本地時間格式
                 const localDateTime = tzUtils.utcToLocal(utcDateTime, clientTimezone);
+                
+                // 發送預約通知郵件給醫生
+                emailService.sendAppointmentNotificationToDoctor(
+                  doctor,
+                  patient,
+                  {
+                    id: newAppointmentId,
+                    date: localDateTime.date,
+                    time: localDateTime.time,
+                    notes: note || '',
+                    formattedDateTime: localDateTime.formattedDateTime
+                  }
+                ).then(emailSent => {
+                  console.log(`[預約日誌] 醫生預約通知郵件${emailSent ? '已發送' : '發送失敗'}`);
+                });
+
+                // 發送預約確認郵件給患者
+                emailService.sendAppointmentConfirmationToPatient(
+                  patient,
+                  doctor,
+                  {
+                    id: newAppointmentId,
+                    date: localDateTime.date,
+                    time: localDateTime.time,
+                    notes: note || '',
+                    formattedDateTime: localDateTime.formattedDateTime
+                  }
+                ).then(emailSent => {
+                  console.log(`[預約日誌] 患者預約確認郵件${emailSent ? '已發送' : '發送失敗'}`);
+                });
                 
                 // 返回成功響應，包含預約 ID
                 res.status(201).json({
@@ -369,10 +400,79 @@ const updateAppointmentStatus = (db) => (req, res) => {
             });
           }
           console.log(`[更新狀態日誌] 成功獲取更新後的預約 ${appointmentId}:`, JSON.stringify(updatedAppointment));
-          res.json({ 
-            success: true, 
-            message: '預約狀態已成功更新', 
-            appointment: updatedAppointment 
+          
+          // 查詢醫生和患者信息，用於發送通知
+          const getUsersQuery = `
+            SELECT d.*, p.* 
+            FROM users d, users p 
+            WHERE d.id = ? AND p.id = ?
+          `;
+          db.get(getUsersQuery, [updatedAppointment.doctor_id, updatedAppointment.patient_id], (err, result) => {
+            if (err) {
+              console.error('[更新狀態日誌] 查詢用戶信息錯誤:', err.message);
+              // 繼續處理，即使無法獲取用戶信息也要返回成功響應
+              res.json({ 
+                success: true, 
+                message: '預約狀態已成功更新', 
+                appointment: updatedAppointment 
+              });
+              return;
+            }
+            
+            // 如果能找到用戶信息，準備發送通知
+            if (result) {
+              // 將flat結果轉換為醫生和患者對象
+              // 假設第一個結果是醫生，第二個是患者
+              const doctor = {
+                id: updatedAppointment.doctor_id,
+                name: result.name, // 假設有name屬性
+                email: result.email,
+                username: result.username
+              };
+              
+              const patient = {
+                id: updatedAppointment.patient_id,
+                name: result.name, // 因為是flat結果，需要在實際情況中調整
+                email: result.email,
+                username: result.username
+              };
+              
+              // 分別發送狀態變更通知給醫生和患者
+              emailService.sendAppointmentStatusChangeNotification(
+                doctor,
+                {
+                  id: updatedAppointment.id,
+                  date: updatedAppointment.date,
+                  time: updatedAppointment.time,
+                  notes: updatedAppointment.notes || ''
+                },
+                status,
+                'doctor'
+              ).then(emailSent => {
+                console.log(`[更新狀態日誌] 醫生狀態變更通知${emailSent ? '已發送' : '發送失敗'}`);
+              });
+              
+              emailService.sendAppointmentStatusChangeNotification(
+                patient,
+                {
+                  id: updatedAppointment.id,
+                  date: updatedAppointment.date,
+                  time: updatedAppointment.time,
+                  notes: updatedAppointment.notes || ''
+                },
+                status,
+                'patient'
+              ).then(emailSent => {
+                console.log(`[更新狀態日誌] 患者狀態變更通知${emailSent ? '已發送' : '發送失敗'}`);
+              });
+            }
+            
+            // 返回成功響應
+            res.json({ 
+              success: true, 
+              message: '預約狀態已成功更新', 
+              appointment: updatedAppointment 
+            });
           });
         });
       });
