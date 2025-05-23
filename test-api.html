@@ -85,6 +85,14 @@
         <h1>🧪 心理治療預約系統 API 測試</h1>
         <p>後端 API: <strong>https://psy-backend.zeabur.app</strong></p>
         
+        <!-- CORS 測試區域 -->
+        <div class="test-section">
+            <h2>🌐 CORS 跨域測試</h2>
+            <button onclick="testCORS()">測試 CORS 連接</button>
+            <button onclick="testPreflight()">測試 OPTIONS 預檢</button>
+            <div id="corsResult" class="result"></div>
+        </div>
+        
         <!-- 登入測試區域 -->
         <div class="test-section">
             <h2>🔐 登入測試</h2>
@@ -456,14 +464,80 @@
             }
         }
 
+        // **新增：CORS 測試功能**
+        async function testCORS() {
+            const resultDiv = document.getElementById('corsResult');
+            resultDiv.textContent = '正在測試 CORS 連接...';
+            resultDiv.className = 'result';
+
+            try {
+                // 測試簡單的 GET 請求
+                const { response, data } = await apiRequest('/api/health');
+                
+                if (response.ok) {
+                    resultDiv.textContent = `✅ CORS 連接成功！\n${JSON.stringify(data, null, 2)}`;
+                    resultDiv.className = 'result success';
+                } else {
+                    resultDiv.textContent = `❌ CORS 連接失敗！\n狀態碼: ${response.status}\n回應: ${JSON.stringify(data, null, 2)}`;
+                    resultDiv.className = 'result error';
+                }
+            } catch (error) {
+                resultDiv.textContent = `❌ CORS 連接錯誤！\n錯誤: ${error.message}`;
+                resultDiv.className = 'result error';
+            }
+        }
+
+        async function testPreflight() {
+            const resultDiv = document.getElementById('corsResult');
+            resultDiv.textContent = '正在測試 OPTIONS 預檢請求...';
+            resultDiv.className = 'result';
+
+            try {
+                const response = await fetch(`${API_BASE}/api/auth/login`, {
+                    method: 'OPTIONS',
+                    headers: {
+                        'Origin': window.location.origin,
+                        'Access-Control-Request-Method': 'POST',
+                        'Access-Control-Request-Headers': 'Content-Type,Authorization'
+                    }
+                });
+
+                if (response.ok) {
+                    const corsHeaders = {
+                        'Access-Control-Allow-Origin': response.headers.get('Access-Control-Allow-Origin'),
+                        'Access-Control-Allow-Methods': response.headers.get('Access-Control-Allow-Methods'),
+                        'Access-Control-Allow-Headers': response.headers.get('Access-Control-Allow-Headers'),
+                        'Access-Control-Allow-Credentials': response.headers.get('Access-Control-Allow-Credentials')
+                    };
+                    
+                    resultDiv.textContent = `✅ OPTIONS 預檢請求成功！\n狀態碼: ${response.status}\nCORS 標頭:\n${JSON.stringify(corsHeaders, null, 2)}`;
+                    resultDiv.className = 'result success';
+                } else {
+                    resultDiv.textContent = `❌ OPTIONS 預檢請求失敗！\n狀態碼: ${response.status}`;
+                    resultDiv.className = 'result error';
+                }
+            } catch (error) {
+                resultDiv.textContent = `❌ OPTIONS 預檢請求錯誤！\n錯誤: ${error.message}`;
+                resultDiv.className = 'result error';
+            }
+        }
+
         // 頁面載入時自動檢查 API 健康狀態
         window.onload = function() {
-            testHealth();
+            // 首先測試 CORS 連接
+            testCORS();
+            
+            // 然後測試 API 健康狀態
+            setTimeout(() => {
+                testHealth();
+            }, 1000);
             
             // 檢查是否有存儲的 token
             const token = localStorage.getItem('auth_token');
             if (token) {
-                getCurrentUser();
+                setTimeout(() => {
+                    getCurrentUser();
+                }, 2000);
             }
         };
     </script>
