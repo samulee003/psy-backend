@@ -12,7 +12,8 @@ module.exports = (db) => {
   const userRoutes = require('./userRoutes')(db);
   const appointmentRoutes = require('./appointmentRoutes')(db);
   const scheduleRoutes = require('./scheduleRoutes')(db);
-  const settingsRoutes = require('./settingsRoutes')(db); // 傳遞 db
+  const settingsRoutes = require('./settingsRoutes')(db);
+  const adminRoutes = require('./adminRoutes')(db);
 
   // 掛載路由
   router.use('/api/auth', authRoutes);
@@ -20,6 +21,7 @@ module.exports = (db) => {
   router.use('/api/appointments', appointmentRoutes);
   router.use('/api/schedules', scheduleRoutes);
   router.use('/api/settings', settingsRoutes);
+  router.use('/api/admin', adminRoutes);
 
   // 直接添加登入與註冊路由，以匹配前端的 API 調用
   const authController = require('../controllers/authController')(db);
@@ -32,7 +34,8 @@ module.exports = (db) => {
       status: 'ok',
       message: '伺服器運行正常',
       version: '1.0.0',
-      timestamp: new Date().toISOString()
+      timestamp: new Date().toISOString(),
+      cors: 'enabled'
     });
   });
   

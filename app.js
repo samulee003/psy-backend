@@ -33,14 +33,58 @@ console.log('[APP] 資料庫連接已初始化 (等待實際連接結果)');
 
 // --- 基本中間件 ---
 console.log('[APP] 準備註冊 CORS 中間件...');
-app.use(cors({
-  origin: true, // 允許所有來源請求，更適合在生產環境中
-  credentials: true, // 允許跨域傳遞cookie
+
+// **修復：更具體的 CORS 配置**
+const corsOptions = {
+  origin: function (origin, callback) {
+    // 允許的來源清單
+    const allowedOrigins = [
+      'https://therapy-booking.zeabur.app',
+      'http://localhost:3000',
+      'http://localhost:5173',
+      'http://127.0.0.1:3000',
+      'http://127.0.0.1:5173'
+    ];
+    
+    // 允許沒有 origin 的請求（例如 Postman、伺服器到伺服器的請求）
+    if (!origin) return callback(null, true);
+    
+    // 檢查來源是否在允許清單中
+    if (allowedOrigins.indexOf(origin) !== -1) {
+      callback(null, true);
+    } else {
+      console.log('[CORS] 拒絕來源:', origin);
+      callback(new Error('不被 CORS 政策允許的來源'), false);
+    }
+  },
+  credentials: true, // 允許跨域傳遞 cookie
   optionsSuccessStatus: 200,
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization']
-}));
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'HEAD', 'PATCH'],
+  allowedHeaders: [
+    'Content-Type', 
+    'Authorization', 
+    'X-Requested-With',
+    'Accept',
+    'Origin',
+    'Access-Control-Request-Method',
+    'Access-Control-Request-Headers'
+  ],
+  exposedHeaders: ['Content-Range', 'X-Content-Range'],
+  preflightContinue: false
+};
+
+app.use(cors(corsOptions));
 console.log('[APP] CORS 中間件已註冊');
+
+// **新增：手動處理 OPTIONS 預檢請求**
+app.options('*', (req, res) => {
+  console.log('[CORS] 處理 OPTIONS 預檢請求:', req.method, req.path);
+  res.header('Access-Control-Allow-Origin', req.headers.origin || '*');
+  res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS, HEAD, PATCH');
+  res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With, Accept, Origin');
+  res.header('Access-Control-Allow-Credentials', 'true');
+  res.sendStatus(200);
+});
 
 console.log('[APP] 準備註冊 JSON 和 URL-encoded 中間件...');
 app.use(express.json());
