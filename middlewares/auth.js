@@ -154,11 +154,33 @@ const authenticatePatient = (req, res, next) => {
   });
 };
 
+// **新增：通用角色驗證中間件**
+const requireRole = (role) => {
+  return (req, res, next) => {
+    // 首先驗證用戶身份
+    authenticateUser(req, res, () => {
+      // 然後檢查角色權限
+      if (req.user.role === role || req.user.role === 'admin') {
+        next();
+      } else {
+        console.log(`[Auth] 用戶 ${req.user.email} (${req.user.role}) 嘗試訪問 ${role} 專用功能`);
+        res.status(403).json({ 
+          success: false, 
+          error: `需要 ${role} 權限才能訪問此功能`,
+          userRole: req.user.role,
+          requiredRole: role
+        });
+      }
+    });
+  };
+};
+
 module.exports = {
   JWT_SECRET,
   authenticateUser,
   authenticateAdmin,
   authenticateDoctor,
   authenticatePatient,
-  optionalAuthentication
+  optionalAuthentication,
+  requireRole // **新增：匯出 requireRole 函數**
 }; 
