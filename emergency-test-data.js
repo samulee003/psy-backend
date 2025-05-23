@@ -32,7 +32,11 @@ async function main() {
     const usersTableInfo = await getTableInfo('users');
     const scheduleTableInfo = await getTableInfo('schedule');
     
-    // 2. 確保有醫生用戶
+    // 2. 確保有標準測試用戶
+    console.log('[緊急] 確保有標準測試用戶...');
+    await ensureStandardUsersExist(usersTableInfo);
+    
+    // 3. 確保有醫生用戶
     console.log('[緊急] 確保有醫生用戶...');
     const doctor = await ensureDoctorExists(usersTableInfo);
     
@@ -41,7 +45,7 @@ async function main() {
     }
     console.log(`[緊急] 獲取到的醫生 ID: ${doctor.id}`);
     
-    // 3. 強制為2025年5月1日添加一條排班記錄
+    // 4. 強制為2025年5月1日添加一條排班記錄
     if (scheduleTableInfo.exists) {
         console.log(`[緊急] 強制為 2025-05-01 添加排班數據 (醫生ID: ${doctor.id})...`);
         await forceAddSingleScheduleEntry(scheduleTableInfo, doctor.id, '2025-05-01');
@@ -49,7 +53,7 @@ async function main() {
         console.warn('[緊急] Schedule 表不存在，跳過強制添加排班條目。');
     }
 
-    // 4. 確保有排班數據 (例如，為2025年5月)
+    // 5. 確保有排班數據 (例如，為2025年5月)
     const targetYear = 2025;
     const targetMonth = 5; // 5 代表五月
     console.log(`[緊急] 確保為 ${targetYear}年${targetMonth}月 添加排班數據 (醫生ID: ${doctor.id})...`);
@@ -320,6 +324,116 @@ function runQuery(query, params = []) {
       }
       resolve({ lastID: this.lastID, changes: this.changes });
     });
+  });
+}
+
+/**
+ * 確保標準測試用戶存在
+ */
+async function ensureStandardUsersExist(tableInfo) {
+  if (!tableInfo.exists) {
+    console.warn('[緊急] users 表不存在，跳過創建標準用戶');
+    return;
+  }
+  
+  const standardUsers = [
+    {
+      username: 'admin@example.com',
+      email: 'admin@example.com',
+      password: 'password123',
+      name: '系統管理員',
+      role: 'admin',
+      phone: '+85212345678'
+    },
+    {
+      username: 'doctor@example.com',
+      email: 'doctor@example.com', 
+      password: 'password123',
+      name: '測試醫生',
+      role: 'doctor',
+      phone: '+86123456789'
+    },
+    {
+      username: 'patient@example.com',
+      email: 'patient@example.com',
+      password: 'password123', 
+      name: '測試患者',
+      role: 'patient',
+      phone: '66881100'
+    }
+  ];
+  
+  console.log('[緊急] 開始檢查/創建標準測試用戶...');
+  
+  for (const userData of standardUsers) {
+    await createStandardUserIfNotExists(tableInfo, userData);
+  }
+  
+  console.log('[緊急] 標準用戶檢查/創建完成');
+}
+
+/**
+ * 檢查並創建標準用戶
+ */
+async function createStandardUserIfNotExists(tableInfo, userData) {
+  return new Promise((resolve, reject) => {
+    // 先檢查用戶是否已存在
+    db.get(
+      'SELECT id, email, name, role FROM users WHERE email = ? OR username = ?',
+      [userData.email, userData.username],
+      async (err, existingUser) => {
+        if (err) {
+          console.error(`[緊急] 檢查用戶 ${userData.email} 時出錯: ${err.message}`);
+          return resolve(); // 不阻塞流程
+        }
+        
+        if (existingUser) {
+          console.log(`[緊急] 標準用戶已存在: ${existingUser.name} (${existingUser.email}) - ${existingUser.role}`);
+          return resolve();
+        }
+        
+        try {
+          // 加密密碼
+          const hashedPassword = await bcrypt.hash(userData.password, 10);
+          
+          // 構建字段和值
+          const fields = ['role'];
+          const values = [userData.role];
+          const placeholders = ['?'];
+          
+          const optionalFields = [
+            { name: 'username', value: userData.username },
+            { name: 'email', value: userData.email },
+            { name: 'password', value: hashedPassword },
+            { name: 'name', value: userData.name },
+            { name: 'phone', value: userData.phone }
+          ];
+          
+          optionalFields.forEach(field => {
+            if (tableInfo.hasColumn(field.name)) {
+              fields.push(field.name);
+              values.push(field.value);
+              placeholders.push('?');
+            }
+          });
+          
+          // 創建新用戶
+          const query = `INSERT INTO users (${fields.join(', ')}) VALUES (${placeholders.join(', ')})`;
+          
+          db.run(query, values, function(err) {
+            if (err) {
+              console.error(`[緊急] 創建標準用戶 ${userData.email} 失敗: ${err.message}`);
+              return resolve(); // 不阻塞流程
+            }
+            console.log(`[緊急] ✅ 已創建標準用戶: ${userData.name} (${userData.email}) - ${userData.role}, ID: ${this.lastID}`);
+            resolve();
+          });
+        } catch (hashError) {
+          console.error(`[緊急] 密碼加密失敗: ${hashError.message}`);
+          resolve(); // 不阻塞流程
+        }
+      }
+    );
   });
 }
 
