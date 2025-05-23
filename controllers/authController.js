@@ -10,18 +10,19 @@ const validators = require('../utils/validators');
 // 註冊新用戶
 const register = (db) => async (req, res) => {
   try {
+    const { name, email, password, role = 'patient', username, phone } = req.body;
+
+    // 使用 email 或 username 作為用戶 email，如果 email 為空且 username 存在，則將 username 賦值給 email
+    const userEmail = email || username;
+    const modifiedBody = { ...req.body, email: userEmail };
+
     // 驗證用戶輸入
-    const validation = validators.validateUser(req.body);
+    const validation = validators.validateUser(modifiedBody);
     if (!validation.isValid) {
       console.log('[Auth] 註冊錯誤: 驗證失敗', validation.error);
       return res.status(400).json({ success: false, error: validation.error });
     }
     
-    const { name, email, password, role = 'patient', username, phone } = req.body;
-    
-    // 使用 email 或 username 作為用戶 email
-    const userEmail = email || username;
-
     console.log('[Auth] 開始處理註冊請求:', { name, email: userEmail, role });
 
     // 驗證必填欄位

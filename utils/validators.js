@@ -45,7 +45,9 @@ const isValidEmail = (email) => {
  * @returns {boolean} - 是否有效
  */
 const isValidPhone = (phone) => {
-  const phonePattern = /^\d{8,15}$/;  // 8-15位數字
+  // 允許 +86, +852, +853 開頭，後面跟數字
+  // 或者原本的 8-15 位純數字
+  const phonePattern = /^(?:\\+(?:86|852|853))?\\d{8,15}$/;
   return phonePattern.test(phone);
 };
 
@@ -109,7 +111,7 @@ const validateAppointment = (appointmentData) => {
     if (appointmentData.patientInfo.phone && !isValidPhone(appointmentData.patientInfo.phone)) {
       return {
         isValid: false,
-        error: '電話號碼格式不正確，應為 8-15 位數字'
+        error: '電話號碼格式不正確，可選區號 (+86, +852, +853) 後接8-15位數字'
       };
     }
     
@@ -187,7 +189,7 @@ const validateUser = (userData) => {
   if (userData.phone && !isValidPhone(userData.phone)) {
     return {
       isValid: false,
-      error: '電話號碼格式不正確，應為 8-15 位數字'
+      error: '電話號碼格式不正確，可選區號 (+86, +852, +853) 後接8-15位數字'
     };
   }
   
