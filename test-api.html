@@ -165,6 +165,14 @@
             <button onclick="testHealth()">檢查 API 狀態</button>
             <div id="healthResult" class="result"></div>
         </div>
+
+        <!-- 管理員功能 -->
+        <div class="test-section">
+            <h2>⚙️ 管理員功能</h2>
+            <p><small>⚠️ 需要管理員權限才能使用</small></p>
+            <button onclick="updateDatabaseSchema()">更新資料庫架構</button>
+            <div id="adminResult" class="result"></div>
+        </div>
     </div>
 
     <script>
@@ -422,6 +430,29 @@
             } else {
                 resultDiv.textContent = `❌ API 檢查失敗！\n${JSON.stringify(data, null, 2)}`;
                 resultDiv.className = 'result error';
+            }
+        }
+
+        // **新增：更新資料庫架構**
+        async function updateDatabaseSchema() {
+            const resultDiv = document.getElementById('adminResult');
+            resultDiv.textContent = '正在更新資料庫架構...';
+            resultDiv.className = 'result';
+
+            const { response, data } = await apiRequest('/api/admin/update-schema', {
+                method: 'POST'
+            });
+
+            if (response.ok) {
+                resultDiv.textContent = `✅ 資料庫架構更新成功！\n${JSON.stringify(data, null, 2)}`;
+                resultDiv.className = 'result success';
+            } else {
+                resultDiv.textContent = `❌ 更新失敗！\n${JSON.stringify(data, null, 2)}`;
+                resultDiv.className = 'result error';
+                
+                if (response.status === 403) {
+                    resultDiv.textContent += '\n\n⚠️ 需要管理員權限，請先登入為管理員';
+                }
             }
         }
 
