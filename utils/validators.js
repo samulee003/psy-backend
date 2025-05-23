@@ -47,7 +47,7 @@ const isValidEmail = (email) => {
 const isValidPhone = (phone) => {
   // 允許 +86, +852, +853 開頭，後面跟數字
   // 或者原本的 8-15 位純數字
-  const phonePattern = /^(?:\\+(?:86|852|853))?\\d{8,15}$/;
+  const phonePattern = /^(?:\+(?:86|852|853))?\d{8,15}$/;
   return phonePattern.test(phone);
 };
 
