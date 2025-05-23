@@ -132,8 +132,31 @@
                 </select>
                 <input type="text" id="regPhone" placeholder="電話號碼">
                 <button onclick="testRegister()">註冊</button>
+                <button onclick="testDuplicateEmailRegister()">測試重複郵箱註冊</button>
             </div>
             <div id="registerResult" class="result"></div>
+        </div>
+
+        <!-- 忘記密碼測試 -->
+        <div class="test-section">
+            <h2>🔐 忘記密碼測試</h2>
+            <div>
+                <input type="email" id="forgotEmail" placeholder="電子郵件" value="admin@example.com">
+                <button onclick="testForgotPassword()">發送重置郵件</button>
+            </div>
+            <div id="forgotPasswordResult" class="result"></div>
+        </div>
+
+        <!-- 重置密碼測試 -->
+        <div class="test-section">
+            <h2>🔑 重置密碼測試</h2>
+            <div>
+                <input type="email" id="resetEmail" placeholder="電子郵件" value="admin@example.com">
+                <input type="text" id="resetToken" placeholder="重置驗證碼">
+                <input type="password" id="newPassword" placeholder="新密碼" value="newpassword123">
+                <button onclick="testResetPassword()">重置密碼</button>
+            </div>
+            <div id="resetPasswordResult" class="result"></div>
         </div>
 
         <!-- API 健康檢查 -->
@@ -292,6 +315,95 @@
                 resultDiv.className = 'result success';
             } else {
                 resultDiv.textContent = `❌ 註冊失敗！\n${JSON.stringify(data, null, 2)}`;
+                resultDiv.className = 'result error';
+                
+                // 如果是重複郵箱錯誤，提供登入建議
+                if (data.suggestion === 'login') {
+                    resultDiv.textContent += '\n\n💡 建議：嘗試直接登入此郵箱';
+                }
+            }
+        }
+
+        // **新增：測試重複郵箱註冊**
+        async function testDuplicateEmailRegister() {
+            // 使用已知存在的郵箱
+            document.getElementById('regName').value = '測試用戶';
+            document.getElementById('regEmail').value = 'admin@example.com';
+            document.getElementById('regPassword').value = 'test123';
+            document.getElementById('regRole').value = 'patient';
+            document.getElementById('regPhone').value = '+86-12345678';
+            
+            await testRegister();
+        }
+
+        // **新增：忘記密碼測試**
+        async function testForgotPassword() {
+            const email = document.getElementById('forgotEmail').value;
+            const resultDiv = document.getElementById('forgotPasswordResult');
+
+            if (!email) {
+                resultDiv.textContent = '❌ 請輸入電子郵件地址！';
+                resultDiv.className = 'result error';
+                return;
+            }
+
+            resultDiv.textContent = '正在發送重置郵件...';
+            resultDiv.className = 'result';
+
+            const { response, data } = await apiRequest('/api/auth/forgot-password', {
+                method: 'POST',
+                body: JSON.stringify({ email })
+            });
+
+            if (response.ok) {
+                resultDiv.textContent = `✅ 重置郵件已發送！\n${JSON.stringify(data, null, 2)}`;
+                resultDiv.className = 'result success';
+                
+                // 如果是開發環境，顯示重置令牌
+                if (data.devToken) {
+                    resultDiv.textContent += `\n\n🔧 開發環境令牌: ${data.devToken}`;
+                    // 自動填入重置表單
+                    document.getElementById('resetToken').value = data.devToken;
+                }
+            } else {
+                resultDiv.textContent = `❌ 發送失敗！\n${JSON.stringify(data, null, 2)}`;
+                resultDiv.className = 'result error';
+            }
+        }
+
+        // **新增：重置密碼測試**
+        async function testResetPassword() {
+            const email = document.getElementById('resetEmail').value;
+            const resetToken = document.getElementById('resetToken').value;
+            const newPassword = document.getElementById('newPassword').value;
+            const resultDiv = document.getElementById('resetPasswordResult');
+
+            if (!email || !resetToken || !newPassword) {
+                resultDiv.textContent = '❌ 請填寫所有欄位！';
+                resultDiv.className = 'result error';
+                return;
+            }
+
+            resultDiv.textContent = '正在重置密碼...';
+            resultDiv.className = 'result';
+
+            const { response, data } = await apiRequest('/api/auth/reset-password', {
+                method: 'POST',
+                body: JSON.stringify({ email, resetToken, newPassword })
+            });
+
+            if (response.ok) {
+                resultDiv.textContent = `✅ 密碼重置成功！\n${JSON.stringify(data, null, 2)}`;
+                resultDiv.className = 'result success';
+                
+                // 提示用戶用新密碼登入
+                resultDiv.textContent += '\n\n💡 請使用新密碼登入系統';
+                
+                // 清空表單
+                document.getElementById('resetToken').value = '';
+                document.getElementById('newPassword').value = 'newpassword123';
+            } else {
+                resultDiv.textContent = `❌ 重置失敗！\n${JSON.stringify(data, null, 2)}`;
                 resultDiv.className = 'result error';
             }
         }

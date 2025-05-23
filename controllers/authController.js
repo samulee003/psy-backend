@@ -22,46 +22,53 @@ const register = (db) => async (req, res) => {
       console.log('[Auth] 註冊錯誤: 驗證失敗', validation.error);
       return res.status(400).json({ success: false, error: validation.error });
     }
-    
+
     console.log('[Auth] 開始處理註冊請求:', { name, email: userEmail, role });
 
     // 驗證必填欄位
     if (!name || !userEmail || !password) {
-      console.log('[Auth] 註冊錯誤: 缺少必填欄位');
       return res.status(400).json({ success: false, error: '姓名、電子郵件和密碼都是必填的' });
     }
 
-    // 檢查郵箱是否已經註冊 - 修改: 更明確地檢查email和username欄位
-    const checkQuery = 'SELECT * FROM users WHERE email = ? OR username = ?';
-    console.log('[Auth] 執行重複用戶檢查:', checkQuery, [userEmail, userEmail]);
+    // **修復：更嚴格的重複註冊檢查**
+    console.log('[Auth] 檢查電子郵件是否已存在:', userEmail);
     
-    db.get(checkQuery, [userEmail, userEmail], async (err, user) => {
+    // 分別檢查 email 和 username 欄位
+    const checkUserQuery = `
+      SELECT id, email, username, name 
+      FROM users 
+      WHERE email = ? OR username = ?
+    `;
+    
+    db.get(checkUserQuery, [userEmail, userEmail], async (err, existingUser) => {
       if (err) {
         console.error('[Auth] 查詢用戶時發生錯誤:', err.message);
-        return res.status(500).json({ success: false, error: '伺服器錯誤' });
+        return res.status(500).json({ success: false, error: '伺服器錯誤，請稍後再試' });
       }
 
-      if (user) {
-        // 更詳細的日誌，顯示哪個字段匹配
-        if (user.email === userEmail) {
-          console.log('[Auth] 註冊錯誤: 電子郵件已存在', user.email);
-          return res.status(400).json({ success: false, error: '此電子郵件已被註冊' });
-        }
-        if (user.username === userEmail) {
-          console.log('[Auth] 註冊錯誤: 用戶名已存在', user.username);
-          return res.status(400).json({ success: false, error: '此用戶名已被註冊' });
-        }
+      if (existingUser) {
+        console.log('[Auth] 發現重複用戶:', { 
+          existingId: existingUser.id, 
+          existingEmail: existingUser.email,
+          existingUsername: existingUser.username,
+          attemptedEmail: userEmail 
+        });
         
-        console.log('[Auth] 註冊錯誤: 用戶已存在', user);
-        return res.status(400).json({ success: false, error: '此電子郵件或用戶名已被註冊' });
+        return res.status(400).json({ 
+          success: false, 
+          error: `此電子郵件 "${userEmail}" 已被註冊，請直接登入或使用其他電子郵件`,
+          suggestion: 'login',
+          existingEmail: userEmail
+        });
       }
 
+      // 沒有重複用戶，可以繼續註冊
       try {
         // 加密密碼
         const saltRounds = 10;
         const hashedPassword = await bcrypt.hash(password, saltRounds);
 
-        // 準備插入數據，包括可選的電話號碼
+        // 準備插入數據
         const fields = ['name', 'email', 'username', 'password', 'role'];
         const values = [name, userEmail, userEmail, hashedPassword, role];
         let placeholders = '?, ?, ?, ?, ?';
@@ -87,18 +94,17 @@ const register = (db) => async (req, res) => {
           if (err) {
             console.error('[Auth] 創建用戶時發生錯誤:', err.message);
             
-            // 檢查是否為唯一性約束錯誤
+            // 檢查是否為唯一性約束錯誤（雙重保護）
             if (err.message.includes('UNIQUE constraint failed')) {
-              if (err.message.includes('users.email')) {
-                return res.status(400).json({ success: false, error: '此電子郵件已被註冊' });
-              }
-              if (err.message.includes('users.username')) {
-                return res.status(400).json({ success: false, error: '此用戶名已被註冊' });
-              }
-              return res.status(400).json({ success: false, error: '此電子郵件或用戶名已被註冊' });
+              return res.status(400).json({ 
+                success: false, 
+                error: `此電子郵件 "${userEmail}" 已被註冊，請直接登入`,
+                suggestion: 'login',
+                existingEmail: userEmail
+              });
             }
             
-            return res.status(500).json({ success: false, error: '無法創建用戶' });
+            return res.status(500).json({ success: false, error: '無法創建用戶，請稍後再試' });
           }
 
           console.log('[Auth] 用戶創建成功, ID:', this.lastID);
@@ -112,19 +118,18 @@ const register = (db) => async (req, res) => {
 
           console.log('[Auth] 用戶註冊成功，設置 Cookie:', this.lastID, userEmail, role);
 
-          // 更安全的 cookie 設置
+          // 設置 cookie
           const cookieOptions = {
             httpOnly: true,
             secure: process.env.NODE_ENV === 'production',
             maxAge: 24 * 60 * 60 * 1000, // 24小時
             sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
-            path: '/' // 確保整個網站都能訪問 cookie
+            path: '/'
           };
           
-          console.log('[Auth] 設置 cookie 選項:', JSON.stringify(cookieOptions));
           res.cookie('token', token, cookieOptions);
 
-          // 回傳成功信息，添加token到回應中，讓前端可以存入localStorage
+          // 回傳成功信息
           res.status(201).json({
             success: true,
             message: '註冊成功',
@@ -135,11 +140,11 @@ const register = (db) => async (req, res) => {
               role,
               phone: phone || null
             },
-            token: token // 明確提供 token 供前端存儲在 localStorage
+            token: token
           });
         });
-      } catch (err) {
-        console.error('[Auth] 密碼加密錯誤:', err.message);
+      } catch (hashError) {
+        console.error('[Auth] 密碼加密錯誤:', hashError.message);
         res.status(500).json({ success: false, error: '註冊過程中發生錯誤' });
       }
     });
@@ -277,9 +282,195 @@ const getCurrentUser = (req, res) => {
   }
 };
 
+// **新增：忘記密碼功能**
+const forgotPassword = (db) => async (req, res) => {
+  try {
+    const { email } = req.body;
+
+    if (!email) {
+      return res.status(400).json({ 
+        success: false, 
+        error: '請提供電子郵件地址' 
+      });
+    }
+
+    console.log('[Auth] 處理忘記密碼請求:', email);
+
+    // 查詢用戶是否存在
+    db.get('SELECT id, name, email FROM users WHERE email = ? OR username = ?', [email, email], async (err, user) => {
+      if (err) {
+        console.error('[Auth] 查詢用戶時發生錯誤:', err.message);
+        return res.status(500).json({ success: false, error: '伺服器錯誤' });
+      }
+
+      if (!user) {
+        // 為了安全起見，不透露用戶是否存在
+        return res.json({
+          success: true,
+          message: '如果該電子郵件地址存在於我們的系統中，您將收到密碼重置郵件'
+        });
+      }
+
+      try {
+        // 生成重置令牌（6位隨機數字）
+        const resetToken = Math.floor(100000 + Math.random() * 900000).toString();
+        const resetTokenExpiry = new Date(Date.now() + 15 * 60 * 1000); // 15分鐘後過期
+
+        // 將重置令牌存儲到資料庫
+        const updateQuery = `
+          UPDATE users 
+          SET reset_token = ?, reset_token_expiry = ? 
+          WHERE id = ?
+        `;
+
+        db.run(updateQuery, [resetToken, resetTokenExpiry.toISOString(), user.id], function(err) {
+          if (err) {
+            console.error('[Auth] 更新重置令牌時發生錯誤:', err.message);
+            return res.status(500).json({ success: false, error: '處理請求時發生錯誤' });
+          }
+
+          console.log('[Auth] 重置令牌已生成:', { userId: user.id, token: resetToken });
+
+          // 發送重置郵件
+          const emailService = require('../utils/emailService');
+          
+          const emailData = {
+            to: user.email,
+            subject: '密碼重置 - 心理治療預約系統',
+            html: `
+              <h2>密碼重置請求</h2>
+              <p>親愛的 ${user.name}，</p>
+              <p>您的密碼重置驗證碼是：</p>
+              <h1 style="color: #4CAF50; font-size: 32px; text-align: center; padding: 20px; border: 2px solid #4CAF50; border-radius: 10px; background-color: #f9f9f9;">${resetToken}</h1>
+              <p>此驗證碼將在 <strong>15分鐘</strong> 後失效。</p>
+              <p>如果您沒有要求重置密碼，請忽略此郵件。</p>
+              <p>如有任何問題，請聯繫我們的客服。</p>
+              <hr>
+              <p><small>心理治療預約系統</small></p>
+            `
+          };
+
+          emailService.sendPasswordResetEmail(emailData)
+            .then(() => {
+              console.log('[Auth] 密碼重置郵件已發送至:', user.email);
+            })
+            .catch((emailError) => {
+              console.error('[Auth] 發送重置郵件失敗:', emailError.message);
+              // 不阻塞回應，但記錄錯誤
+            });
+
+          // 回傳成功回應
+          res.json({
+            success: true,
+            message: '密碼重置郵件已發送，請檢查您的郵箱',
+            // 在開發環境中提供令牌（生產環境中應移除）
+            ...(process.env.NODE_ENV !== 'production' && { devToken: resetToken })
+          });
+        });
+      } catch (error) {
+        console.error('[Auth] 處理忘記密碼時發生錯誤:', error.message);
+        res.status(500).json({ success: false, error: '處理請求時發生錯誤' });
+      }
+    });
+  } catch (error) {
+    console.error('[Auth] 忘記密碼功能發生錯誤:', error.message);
+    res.status(500).json({ success: false, error: '服務暫時不可用' });
+  }
+};
+
+// **新增：重置密碼功能**
+const resetPassword = (db) => async (req, res) => {
+  try {
+    const { email, resetToken, newPassword } = req.body;
+
+    if (!email || !resetToken || !newPassword) {
+      return res.status(400).json({ 
+        success: false, 
+        error: '請提供電子郵件、重置碼和新密碼' 
+      });
+    }
+
+    if (newPassword.length < 6) {
+      return res.status(400).json({ 
+        success: false, 
+        error: '新密碼長度必須至少為 6 個字符' 
+      });
+    }
+
+    console.log('[Auth] 處理密碼重置請求:', { email, resetToken });
+
+    // 查詢用戶和驗證重置令牌
+    const query = `
+      SELECT id, name, email, reset_token, reset_token_expiry 
+      FROM users 
+      WHERE (email = ? OR username = ?) AND reset_token = ?
+    `;
+
+    db.get(query, [email, email, resetToken], async (err, user) => {
+      if (err) {
+        console.error('[Auth] 查詢重置令牌時發生錯誤:', err.message);
+        return res.status(500).json({ success: false, error: '伺服器錯誤' });
+      }
+
+      if (!user) {
+        return res.status(400).json({ 
+          success: false, 
+          error: '無效的重置碼或電子郵件' 
+        });
+      }
+
+      // 檢查令牌是否過期
+      const now = new Date();
+      const tokenExpiry = new Date(user.reset_token_expiry);
+
+      if (now > tokenExpiry) {
+        return res.status(400).json({ 
+          success: false, 
+          error: '重置碼已過期，請重新申請密碼重置' 
+        });
+      }
+
+      try {
+        // 加密新密碼
+        const saltRounds = 10;
+        const hashedPassword = await bcrypt.hash(newPassword, saltRounds);
+
+        // 更新密碼並清除重置令牌
+        const updateQuery = `
+          UPDATE users 
+          SET password = ?, reset_token = NULL, reset_token_expiry = NULL 
+          WHERE id = ?
+        `;
+
+        db.run(updateQuery, [hashedPassword, user.id], function(err) {
+          if (err) {
+            console.error('[Auth] 更新密碼時發生錯誤:', err.message);
+            return res.status(500).json({ success: false, error: '更新密碼時發生錯誤' });
+          }
+
+          console.log('[Auth] 密碼重置成功:', { userId: user.id, email: user.email });
+
+          res.json({
+            success: true,
+            message: '密碼重置成功，請使用新密碼登入'
+          });
+        });
+      } catch (hashError) {
+        console.error('[Auth] 密碼加密錯誤:', hashError.message);
+        res.status(500).json({ success: false, error: '處理新密碼時發生錯誤' });
+      }
+    });
+  } catch (error) {
+    console.error('[Auth] 重置密碼功能發生錯誤:', error.message);
+    res.status(500).json({ success: false, error: '服務暫時不可用' });
+  }
+};
+
 module.exports = (db) => ({
   register: register(db),
   login: login(db),
   logout,
-  getCurrentUser
+  getCurrentUser,
+  forgotPassword: forgotPassword(db),
+  resetPassword: resetPassword(db)
 }); 
