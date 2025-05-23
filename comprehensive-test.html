@@ -1,0 +1,743 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>🏥 心理治療預約系統 - 全面測試</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            border-radius: 20px;
+            padding: 30px;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
+        }
+
+        h1 {
+            text-align: center;
+            color: #2c3e50;
+            margin-bottom: 30px;
+            font-size: 2.5em;
+            text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.1);
+        }
+
+        .test-section {
+            margin-bottom: 30px;
+            padding: 20px;
+            background: #f8f9fa;
+            border-radius: 12px;
+            border-left: 5px solid #007bff;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.07);
+        }
+
+        .test-section h2 {
+            color: #495057;
+            margin-bottom: 15px;
+            font-size: 1.4em;
+        }
+
+        .test-group {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            margin-bottom: 15px;
+        }
+
+        .btn {
+            padding: 12px 24px;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 600;
+            transition: all 0.3s ease;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 12px rgba(0, 0, 0, 0.15);
+        }
+
+        .btn-primary {
+            background: linear-gradient(45deg, #007bff, #0056b3);
+            color: white;
+        }
+
+        .btn-success {
+            background: linear-gradient(45deg, #28a745, #1e7e34);
+            color: white;
+        }
+
+        .btn-warning {
+            background: linear-gradient(45deg, #ffc107, #e0a800);
+            color: #212529;
+        }
+
+        .btn-danger {
+            background: linear-gradient(45deg, #dc3545, #c82333);
+            color: white;
+        }
+
+        .btn-info {
+            background: linear-gradient(45deg, #17a2b8, #138496);
+            color: white;
+        }
+
+        .input-group {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 15px;
+            flex-wrap: wrap;
+        }
+
+        input, select {
+            padding: 12px;
+            border: 2px solid #e9ecef;
+            border-radius: 8px;
+            font-size: 14px;
+            transition: all 0.3s ease;
+            background: white;
+        }
+
+        input:focus, select:focus {
+            outline: none;
+            border-color: #007bff;
+            box-shadow: 0 0 0 3px rgba(0, 123, 255, 0.25);
+        }
+
+        .log-container {
+            background: #1e1e1e;
+            color: #00ff00;
+            padding: 20px;
+            border-radius: 8px;
+            height: 400px;
+            overflow-y: auto;
+            font-family: 'Courier New', monospace;
+            margin-top: 20px;
+            border: 2px solid #333;
+            box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.3);
+        }
+
+        .log-entry {
+            margin-bottom: 8px;
+            padding: 5px;
+            border-radius: 4px;
+        }
+
+        .log-success {
+            color: #28a745;
+            background: rgba(40, 167, 69, 0.1);
+        }
+
+        .log-error {
+            color: #dc3545;
+            background: rgba(220, 53, 69, 0.1);
+        }
+
+        .log-info {
+            color: #17a2b8;
+            background: rgba(23, 162, 184, 0.1);
+        }
+
+        .log-warning {
+            color: #ffc107;
+            background: rgba(255, 193, 7, 0.1);
+        }
+
+        .status-indicator {
+            display: inline-block;
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            margin-right: 8px;
+        }
+
+        .status-online {
+            background: #28a745;
+            box-shadow: 0 0 8px rgba(40, 167, 69, 0.5);
+        }
+
+        .status-offline {
+            background: #dc3545;
+            box-shadow: 0 0 8px rgba(220, 53, 69, 0.5);
+        }
+
+        .status-unknown {
+            background: #ffc107;
+            box-shadow: 0 0 8px rgba(255, 193, 7, 0.5);
+        }
+
+        @media (max-width: 768px) {
+            .container {
+                padding: 20px;
+                margin: 10px;
+            }
+            
+            h1 {
+                font-size: 2em;
+            }
+            
+            .test-group {
+                flex-direction: column;
+            }
+            
+            .btn {
+                width: 100%;
+                margin-bottom: 10px;
+            }
+        }
+
+        .endpoint-status {
+            display: flex;
+            align-items: center;
+            margin-bottom: 10px;
+            padding: 8px;
+            background: rgba(255, 255, 255, 0.5);
+            border-radius: 6px;
+        }
+
+        .loading {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 3px solid #f3f3f3;
+            border-top: 3px solid #007bff;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin-right: 10px;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .auth-info {
+            background: #e8f4fd;
+            border: 1px solid #b8daff;
+            border-radius: 8px;
+            padding: 15px;
+            margin-bottom: 20px;
+        }
+
+        .auth-info h3 {
+            color: #004085;
+            margin-bottom: 10px;
+        }
+
+        .user-badge {
+            display: inline-block;
+            padding: 6px 12px;
+            background: #007bff;
+            color: white;
+            border-radius: 20px;
+            font-size: 12px;
+            margin-right: 10px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🏥 心理治療預約系統全面測試</h1>
+        
+        <!-- 系統狀態 -->
+        <div class="test-section">
+            <h2>🔗 系統連接狀態</h2>
+            <div class="endpoint-status">
+                <span class="status-indicator status-unknown" id="backend-status"></span>
+                <span>後端伺服器: </span>
+                <span id="backend-url">https://psy-backend.zeabur.app</span>
+            </div>
+            <div class="test-group">
+                <button class="btn btn-info" onclick="checkHealth()">檢查健康狀態</button>
+                <button class="btn btn-primary" onclick="testCORS()">測試 CORS</button>
+                <button class="btn btn-warning" onclick="clearLogs()">清除日誌</button>
+            </div>
+        </div>
+
+        <!-- 身份驗證測試 -->
+        <div class="test-section">
+            <h2>🔐 身份驗證測試</h2>
+            
+            <div class="auth-info" id="current-auth" style="display: none;">
+                <h3>當前登入狀態</h3>
+                <div id="auth-display"></div>
+            </div>
+
+            <div class="input-group">
+                <input type="email" id="login-email" placeholder="電子郵件" value="admin@example.com">
+                <input type="password" id="login-password" placeholder="密碼" value="[REDACTED]">
+                <select id="login-role">
+                    <option value="admin@example.com">管理員 (admin@example.com)</option>
+                    <option value="doctor@example.com">醫生 (doctor@example.com)</option>
+                    <option value="patient@example.com">患者 (patient@example.com)</option>
+                </select>
+            </div>
+            
+            <div class="test-group">
+                <button class="btn btn-success" onclick="quickLogin()">快速登入</button>
+                <button class="btn btn-primary" onclick="testLogin()">測試登入</button>
+                <button class="btn btn-warning" onclick="testRegister()">測試註冊</button>
+                <button class="btn btn-info" onclick="getCurrentUser()">獲取當前用戶</button>
+                <button class="btn btn-danger" onclick="testLogout()">登出</button>
+            </div>
+        </div>
+
+        <!-- 用戶管理測試 -->
+        <div class="test-section">
+            <h2>👥 用戶管理測試</h2>
+            <div class="test-group">
+                <button class="btn btn-primary" onclick="getAllUsers()">獲取所有用戶</button>
+                <button class="btn btn-info" onclick="getDoctors()">獲取醫生列表</button>
+                <button class="btn btn-success" onclick="createTestUser()">創建測試用戶</button>
+            </div>
+        </div>
+
+        <!-- 預約管理測試 -->
+        <div class="test-section">
+            <h2>📅 預約管理測試</h2>
+            
+            <div class="input-group">
+                <input type="date" id="appointment-date" value="">
+                <input type="time" id="appointment-time" value="10:00">
+                <input type="text" id="appointment-reason" placeholder="預約原因" value="心理諮詢">
+                <select id="doctor-select">
+                    <option value="">選擇醫生</option>
+                </select>
+            </div>
+            
+            <div class="test-group">
+                <button class="btn btn-success" onclick="createAppointment()">創建預約</button>
+                <button class="btn btn-primary" onclick="getMyAppointments()">我的預約</button>
+                <button class="btn btn-info" onclick="getAllAppointments()">所有預約</button>
+                <button class="btn btn-warning" onclick="updateAppointmentStatus()">更新預約狀態</button>
+            </div>
+        </div>
+
+        <!-- 排程管理測試 -->
+        <div class="test-section">
+            <h2>⏰ 排程管理測試</h2>
+            
+            <div class="input-group">
+                <input type="date" id="schedule-date" value="">
+                <input type="time" id="schedule-start" value="09:00">
+                <input type="time" id="schedule-end" value="17:00">
+            </div>
+            
+            <div class="test-group">
+                <button class="btn btn-success" onclick="createSchedule()">創建排程</button>
+                <button class="btn btn-primary" onclick="getDoctorSchedule()">醫生排程</button>
+                <button class="btn btn-info" onclick="getAvailableSlots()">可用時段</button>
+                <button class="btn btn-warning" onclick="getMonthlySchedule()">月排程</button>
+            </div>
+        </div>
+
+        <!-- 忘記密碼測試 -->
+        <div class="test-section">
+            <h2>🔑 忘記密碼測試</h2>
+            
+            <div class="input-group">
+                <input type="email" id="forgot-email" placeholder="忘記密碼的電子郵件" value="admin@example.com">
+                <input type="text" id="reset-code" placeholder="重置驗證碼">
+                <input type="password" id="new-password" placeholder="新密碼" value="new[REDACTED]">
+            </div>
+            
+            <div class="test-group">
+                <button class="btn btn-warning" onclick="testForgotPassword()">發送重置碼</button>
+                <button class="btn btn-success" onclick="testResetPassword()">重置密碼</button>
+            </div>
+        </div>
+
+        <!-- 日誌顯示 -->
+        <div class="test-section">
+            <h2>📜 測試日誌</h2>
+            <div class="log-container" id="log-container">
+                <div class="log-entry log-info">
+                    <strong>[系統]</strong> 測試頁面已載入，準備進行系統測試...
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // 全局配置
+        const API_BASE = 'https://psy-backend.zeabur.app';
+        let currentUser = null;
+        let authToken = null;
+        let allDoctors = [];
+
+        // 初始化頁面
+        window.onload = function() {
+            setDefaultDates();
+            loadDoctors();
+            checkHealth();
+            getCurrentUser();
+        };
+
+        // 設置預設日期
+        function setDefaultDates() {
+            const today = new Date().toISOString().split('T')[0];
+            const tomorrow = new Date();
+            tomorrow.setDate(tomorrow.getDate() + 1);
+            const tomorrowStr = tomorrow.toISOString().split('T')[0];
+            
+            document.getElementById('appointment-date').value = tomorrowStr;
+            document.getElementById('schedule-date').value = today;
+        }
+
+        // 日誌功能
+        function log(message, type = 'info') {
+            const logContainer = document.getElementById('log-container');
+            const timestamp = new Date().toLocaleTimeString();
+            const entry = document.createElement('div');
+            entry.className = `log-entry log-${type}`;
+            entry.innerHTML = `<strong>[${timestamp}]</strong> ${message}`;
+            logContainer.appendChild(entry);
+            logContainer.scrollTop = logContainer.scrollHeight;
+        }
+
+        function clearLogs() {
+            document.getElementById('log-container').innerHTML = '';
+            log('日誌已清除', 'info');
+        }
+
+        // API 請求函數
+        async function apiRequest(endpoint, options = {}) {
+            const url = `${API_BASE}${endpoint}`;
+            const defaultOptions = {
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                credentials: 'include', // 包含 cookies
+            };
+
+            if (authToken) {
+                defaultOptions.headers['Authorization'] = `Bearer ${authToken}`;
+            }
+
+            const finalOptions = { ...defaultOptions, ...options };
+            if (options.body && typeof options.body === 'object') {
+                finalOptions.body = JSON.stringify(options.body);
+            }
+
+            log(`📤 API 請求: ${options.method || 'GET'} ${endpoint}`, 'info');
+            
+            try {
+                const response = await fetch(url, finalOptions);
+                const contentType = response.headers.get('content-type');
+                
+                let data;
+                if (contentType && contentType.includes('application/json')) {
+                    data = await response.json();
+                } else {
+                    data = { message: await response.text() };
+                }
+
+                if (response.ok) {
+                    log(`✅ API 成功: ${endpoint} - ${JSON.stringify(data)}`, 'success');
+                    return { success: true, data, status: response.status };
+                } else {
+                    log(`❌ API 錯誤: ${endpoint} - ${response.status} - ${JSON.stringify(data)}`, 'error');
+                    return { success: false, data, status: response.status };
+                }
+            } catch (error) {
+                log(`🚫 網路錯誤: ${endpoint} - ${error.message}`, 'error');
+                return { success: false, error: error.message };
+            }
+        }
+
+        // 系統健康檢查
+        async function checkHealth() {
+            const backendStatus = document.getElementById('backend-status');
+            backendStatus.className = 'status-indicator status-unknown';
+            
+            const result = await apiRequest('/api/health');
+            if (result.success) {
+                backendStatus.className = 'status-indicator status-online';
+                log(`🟢 後端伺服器在線: ${result.data.message}`, 'success');
+            } else {
+                backendStatus.className = 'status-indicator status-offline';
+                log('🔴 後端伺服器離線', 'error');
+            }
+        }
+
+        // CORS 測試
+        async function testCORS() {
+            log('🌐 測試 CORS 配置...', 'info');
+            
+            try {
+                const response = await fetch(`${API_BASE}/api/health`, {
+                    method: 'OPTIONS',
+                    headers: {
+                        'Origin': window.location.origin,
+                        'Access-Control-Request-Method': 'POST',
+                        'Access-Control-Request-Headers': 'Content-Type, Authorization'
+                    }
+                });
+                
+                if (response.ok) {
+                    log('✅ CORS 預檢請求成功', 'success');
+                } else {
+                    log(`❌ CORS 預檢請求失敗: ${response.status}`, 'error');
+                }
+            } catch (error) {
+                log(`🚫 CORS 測試錯誤: ${error.message}`, 'error');
+            }
+        }
+
+        // 身份驗證相關
+        function updateAuthDisplay() {
+            const authInfo = document.getElementById('current-auth');
+            const authDisplay = document.getElementById('auth-display');
+            
+            if (currentUser) {
+                authInfo.style.display = 'block';
+                authDisplay.innerHTML = `
+                    <span class="user-badge">${currentUser.role}</span>
+                    <strong>${currentUser.name}</strong> (${currentUser.email})
+                `;
+            } else {
+                authInfo.style.display = 'none';
+            }
+        }
+
+        function quickLogin() {
+            const select = document.getElementById('login-role');
+            const email = select.value;
+            document.getElementById('login-email').value = email;
+            testLogin();
+        }
+
+        async function testLogin() {
+            const email = document.getElementById('login-email').value;
+            const password = document.getElementById('login-password').value;
+            
+            const result = await apiRequest('/api/auth/login', {
+                method: 'POST',
+                body: { email, password }
+            });
+            
+            if (result.success && result.data.user) {
+                currentUser = result.data.user;
+                authToken = result.data.token;
+                updateAuthDisplay();
+                loadDoctors(); // 重新載入醫生列表
+                log(`🎉 登入成功: ${currentUser.name} (${currentUser.role})`, 'success');
+            }
+        }
+
+        async function testRegister() {
+            const email = `test_${Date.now()}@example.com`;
+            const result = await apiRequest('/api/auth/register', {
+                method: 'POST',
+                body: {
+                    name: '測試用戶',
+                    email: email,
+                    password: '[REDACTED]',
+                    role: 'patient',
+                    phone: '0912345678'
+                }
+            });
+        }
+
+        async function getCurrentUser() {
+            const result = await apiRequest('/api/auth/me');
+            if (result.success && result.data.user) {
+                currentUser = result.data.user;
+                updateAuthDisplay();
+            }
+        }
+
+        async function testLogout() {
+            const result = await apiRequest('/api/auth/logout', { method: 'POST' });
+            if (result.success) {
+                currentUser = null;
+                authToken = null;
+                updateAuthDisplay();
+            }
+        }
+
+        // 用戶管理
+        async function getAllUsers() {
+            await apiRequest('/api/users');
+        }
+
+        async function getDoctors() {
+            const result = await apiRequest('/api/users/doctors');
+            if (result.success && result.data.doctors) {
+                allDoctors = result.data.doctors;
+                updateDoctorSelect();
+            }
+        }
+
+        async function loadDoctors() {
+            await getDoctors();
+        }
+
+        function updateDoctorSelect() {
+            const select = document.getElementById('doctor-select');
+            select.innerHTML = '<option value="">選擇醫生</option>';
+            
+            allDoctors.forEach(doctor => {
+                const option = document.createElement('option');
+                option.value = doctor.id;
+                option.textContent = `${doctor.name} (ID: ${doctor.id})`;
+                select.appendChild(option);
+            });
+        }
+
+        async function createTestUser() {
+            const timestamp = Date.now();
+            await apiRequest('/api/auth/register', {
+                method: 'POST',
+                body: {
+                    name: `測試醫生${timestamp}`,
+                    email: `doctor${timestamp}@test.com`,
+                    password: '[REDACTED]',
+                    role: 'doctor',
+                    phone: '0987654321'
+                }
+            });
+        }
+
+        // 預約管理
+        async function createAppointment() {
+            const doctorId = document.getElementById('doctor-select').value;
+            const date = document.getElementById('appointment-date').value;
+            const time = document.getElementById('appointment-time').value;
+            const reason = document.getElementById('appointment-reason').value;
+            
+            if (!doctorId) {
+                log('⚠️ 請選擇醫生', 'warning');
+                return;
+            }
+            
+            if (!currentUser) {
+                log('⚠️ 請先登入', 'warning');
+                return;
+            }
+            
+            await apiRequest('/api/appointments', {
+                method: 'POST',
+                body: {
+                    doctorId: parseInt(doctorId),
+                    patientId: currentUser.id,
+                    appointmentDate: date,
+                    timeSlot: time,
+                    reason: reason
+                }
+            });
+        }
+
+        async function getMyAppointments() {
+            await apiRequest('/api/appointments/my');
+        }
+
+        async function getAllAppointments() {
+            await apiRequest('/api/appointments');
+        }
+
+        async function updateAppointmentStatus() {
+            // 示例：更新第一個預約的狀態
+            await apiRequest('/api/appointments/1/status', {
+                method: 'PUT',
+                body: {
+                    status: 'completed',
+                    note: '預約已完成'
+                }
+            });
+        }
+
+        // 排程管理
+        async function createSchedule() {
+            const date = document.getElementById('schedule-date').value;
+            const startTime = document.getElementById('schedule-start').value;
+            const endTime = document.getElementById('schedule-end').value;
+            
+            if (!currentUser || currentUser.role !== 'doctor') {
+                log('⚠️ 只有醫生可以創建排程', 'warning');
+                return;
+            }
+            
+            await apiRequest('/api/schedules', {
+                method: 'POST',
+                body: {
+                    date: date,
+                    startTime: startTime,
+                    endTime: endTime,
+                    doctorId: currentUser.id
+                }
+            });
+        }
+
+        async function getDoctorSchedule() {
+            if (!allDoctors.length) {
+                log('⚠️ 請先載入醫生列表', 'warning');
+                return;
+            }
+            
+            const doctorId = allDoctors[0].id;
+            await apiRequest(`/api/schedules/doctor/${doctorId}`);
+        }
+
+        async function getAvailableSlots() {
+            if (!allDoctors.length) {
+                log('⚠️ 請先載入醫生列表', 'warning');
+                return;
+            }
+            
+            const doctorId = allDoctors[0].id;
+            const date = document.getElementById('appointment-date').value;
+            await apiRequest(`/api/schedules/available/${doctorId}/${date}`);
+        }
+
+        async function getMonthlySchedule() {
+            const now = new Date();
+            const year = now.getFullYear();
+            const month = (now.getMonth() + 1).toString().padStart(2, '0');
+            await apiRequest(`/api/schedules/${year}/${month}`);
+        }
+
+        // 忘記密碼測試
+        async function testForgotPassword() {
+            const email = document.getElementById('forgot-email').value;
+            await apiRequest('/api/auth/forgot-password', {
+                method: 'POST',
+                body: { email }
+            });
+        }
+
+        async function testResetPassword() {
+            const email = document.getElementById('forgot-email').value;
+            const resetCode = document.getElementById('reset-code').value;
+            const newPassword = document.getElementById('new-password').value;
+            
+            await apiRequest('/api/auth/reset-password', {
+                method: 'POST',
+                body: { email, resetCode, newPassword }
+            });
+        }
+    </script>
+</body>
+</html> 
