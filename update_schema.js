@@ -59,6 +59,37 @@ const db = new sqlite3.Database(dbPath, sqlite3.OPEN_READWRITE, (err) => {
 
 // 更新資料庫結構的主函數
 async function updateDatabaseSchema() {
+  // 檢查 users 表密碼重置功能欄位
+  console.log('檢查 users 表是否存在...');
+  const usersTableExists = await tableExists('users');
+  
+  if (usersTableExists) {
+    console.log('users 表已存在，檢查密碼重置欄位...');
+    
+    const usersTableInfo = await getTableInfo('users');
+    console.log('users 表結構信息:', usersTableInfo.map(c => c.name).join(', '));
+    
+    // 檢查 reset_token 欄位是否存在
+    const hasResetToken = usersTableInfo.some(column => column.name === 'reset_token');
+    if (!hasResetToken) {
+      console.log('正在添加 reset_token 欄位到 users 表...');
+      await addColumn('users', 'reset_token', 'TEXT');
+    } else {
+      console.log('reset_token 欄位已存在');
+    }
+    
+    // 檢查 reset_token_expiry 欄位是否存在
+    const hasResetTokenExpiry = usersTableInfo.some(column => column.name === 'reset_token_expiry');
+    if (!hasResetTokenExpiry) {
+      console.log('正在添加 reset_token_expiry 欄位到 users 表...');
+      await addColumn('users', 'reset_token_expiry', 'TEXT');
+    } else {
+      console.log('reset_token_expiry 欄位已存在');
+    }
+  } else {
+    console.log('users 表不存在，無需添加密碼重置欄位');
+  }
+  
   // 檢查 schedule 表是否存在
   console.log('檢查 schedule 表是否存在...');
   const scheduleTableExists = await tableExists('schedule');
