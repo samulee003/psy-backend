@@ -1,0 +1,328 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>API 測試頁面</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+        }
+        h1, h2 {
+            color: #333;
+            border-bottom: 2px solid #4CAF50;
+            padding-bottom: 10px;
+        }
+        .test-section {
+            margin: 20px 0;
+            padding: 15px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+        }
+        button {
+            background-color: #4CAF50;
+            color: white;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        button:hover {
+            background-color: #45a049;
+        }
+        button:disabled {
+            background-color: #cccccc;
+            cursor: not-allowed;
+        }
+        input, select {
+            padding: 8px;
+            margin: 5px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+        .result {
+            background-color: #f9f9f9;
+            border: 1px solid #ddd;
+            padding: 10px;
+            margin: 10px 0;
+            border-radius: 4px;
+            white-space: pre-wrap;
+            font-family: monospace;
+        }
+        .success {
+            background-color: #d4edda;
+            border-color: #c3e6cb;
+            color: #155724;
+        }
+        .error {
+            background-color: #f8d7da;
+            border-color: #f5c6cb;
+            color: #721c24;
+        }
+        .user-info {
+            background-color: #d1ecf1;
+            border: 1px solid #bee5eb;
+            padding: 10px;
+            border-radius: 4px;
+            margin: 10px 0;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🧪 心理治療預約系統 API 測試</h1>
+        <p>後端 API: <strong>https://psy-backend.zeabur.app</strong></p>
+        
+        <!-- 登入測試區域 -->
+        <div class="test-section">
+            <h2>🔐 登入測試</h2>
+            <div>
+                <input type="email" id="loginEmail" placeholder="電子郵件" value="admin@example.com">
+                <input type="password" id="loginPassword" placeholder="密碼" value="password123">
+                <button onclick="testLogin()">登入</button>
+                <button onclick="testLogout()">登出</button>
+            </div>
+            <div id="loginResult" class="result"></div>
+        </div>
+
+        <!-- 標準測試帳號 -->
+        <div class="test-section">
+            <h2>👥 標準測試帳號</h2>
+            <div>
+                <button onclick="loginAs('admin@example.com')">登入為管理員</button>
+                <button onclick="loginAs('doctor@example.com')">登入為醫生</button>
+                <button onclick="loginAs('patient@example.com')">登入為患者</button>
+                <button onclick="loginAs('samu003@gmail.com')">登入為李昇恆</button>
+            </div>
+        </div>
+
+        <!-- 當前用戶信息 -->
+        <div class="test-section">
+            <h2>👤 當前用戶信息</h2>
+            <button onclick="getCurrentUser()">獲取當前用戶</button>
+            <div id="userInfo" class="user-info" style="display:none;">
+                <h3>登入中：</h3>
+                <div id="userDetails"></div>
+            </div>
+        </div>
+
+        <!-- 註冊測試 -->
+        <div class="test-section">
+            <h2>📝 註冊測試</h2>
+            <div>
+                <input type="text" id="regName" placeholder="姓名">
+                <input type="email" id="regEmail" placeholder="電子郵件">
+                <input type="password" id="regPassword" placeholder="密碼">
+                <select id="regRole">
+                    <option value="patient">患者</option>
+                    <option value="doctor">醫生</option>
+                    <option value="admin">管理員</option>
+                </select>
+                <input type="text" id="regPhone" placeholder="電話號碼">
+                <button onclick="testRegister()">註冊</button>
+            </div>
+            <div id="registerResult" class="result"></div>
+        </div>
+
+        <!-- API 健康檢查 -->
+        <div class="test-section">
+            <h2>🏥 API 健康檢查</h2>
+            <button onclick="testHealth()">檢查 API 狀態</button>
+            <div id="healthResult" class="result"></div>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE = 'https://psy-backend.zeabur.app';
+        let currentUser = null;
+
+        // 通用 API 請求函數
+        async function apiRequest(endpoint, options = {}) {
+            const url = `${API_BASE}${endpoint}`;
+            
+            // 設置默認 headers
+            const headers = {
+                'Content-Type': 'application/json',
+                ...options.headers
+            };
+
+            // 如果有 token，添加到 Authorization header
+            const token = localStorage.getItem('auth_token');
+            if (token) {
+                headers['Authorization'] = `Bearer ${token}`;
+            }
+
+            try {
+                const response = await fetch(url, {
+                    ...options,
+                    headers,
+                    credentials: 'include'
+                });
+
+                const data = await response.json();
+                return { response, data };
+            } catch (error) {
+                return { 
+                    response: { ok: false, status: 0 }, 
+                    data: { error: error.message } 
+                };
+            }
+        }
+
+        // 登入測試
+        async function testLogin() {
+            const email = document.getElementById('loginEmail').value;
+            const password = document.getElementById('loginPassword').value;
+            const resultDiv = document.getElementById('loginResult');
+
+            resultDiv.textContent = '正在登入...';
+            resultDiv.className = 'result';
+
+            const { response, data } = await apiRequest('/api/auth/login', {
+                method: 'POST',
+                body: JSON.stringify({ email, password })
+            });
+
+            if (response.ok) {
+                localStorage.setItem('auth_token', data.token);
+                currentUser = data.user;
+                updateUserInfo();
+                resultDiv.textContent = `✅ 登入成功！\n${JSON.stringify(data, null, 2)}`;
+                resultDiv.className = 'result success';
+            } else {
+                resultDiv.textContent = `❌ 登入失敗！\n${JSON.stringify(data, null, 2)}`;
+                resultDiv.className = 'result error';
+            }
+        }
+
+        // 快速登入標準帳號
+        async function loginAs(email) {
+            document.getElementById('loginEmail').value = email;
+            document.getElementById('loginPassword').value = 'password123';
+            await testLogin();
+        }
+
+        // 登出
+        async function testLogout() {
+            localStorage.removeItem('auth_token');
+            currentUser = null;
+            updateUserInfo();
+            
+            const { response, data } = await apiRequest('/api/auth/logout', {
+                method: 'POST'
+            });
+
+            const resultDiv = document.getElementById('loginResult');
+            resultDiv.textContent = `✅ 已登出！\n${JSON.stringify(data, null, 2)}`;
+            resultDiv.className = 'result success';
+        }
+
+        // 獲取當前用戶
+        async function getCurrentUser() {
+            const { response, data } = await apiRequest('/api/auth/me');
+            
+            if (response.ok) {
+                currentUser = data.user;
+                updateUserInfo();
+            } else {
+                currentUser = null;
+                updateUserInfo();
+                alert('獲取用戶信息失敗：' + data.error);
+            }
+        }
+
+        // 更新用戶信息顯示
+        function updateUserInfo() {
+            const userInfoDiv = document.getElementById('userInfo');
+            const userDetailsDiv = document.getElementById('userDetails');
+
+            if (currentUser) {
+                userInfoDiv.style.display = 'block';
+                userDetailsDiv.innerHTML = `
+                    <strong>ID:</strong> ${currentUser.id}<br>
+                    <strong>姓名:</strong> ${currentUser.name}<br>
+                    <strong>電子郵件:</strong> ${currentUser.email}<br>
+                    <strong>角色:</strong> ${currentUser.role}
+                `;
+            } else {
+                userInfoDiv.style.display = 'none';
+            }
+        }
+
+        // 註冊測試
+        async function testRegister() {
+            const name = document.getElementById('regName').value;
+            const email = document.getElementById('regEmail').value;
+            const password = document.getElementById('regPassword').value;
+            const role = document.getElementById('regRole').value;
+            const phone = document.getElementById('regPhone').value;
+            const resultDiv = document.getElementById('registerResult');
+
+            if (!name || !email || !password) {
+                resultDiv.textContent = '❌ 請填寫所有必填欄位！';
+                resultDiv.className = 'result error';
+                return;
+            }
+
+            resultDiv.textContent = '正在註冊...';
+            resultDiv.className = 'result';
+
+            const { response, data } = await apiRequest('/api/auth/register', {
+                method: 'POST',
+                body: JSON.stringify({ name, email, password, role, phone })
+            });
+
+            if (response.ok) {
+                localStorage.setItem('auth_token', data.token);
+                currentUser = data.user;
+                updateUserInfo();
+                resultDiv.textContent = `✅ 註冊成功！\n${JSON.stringify(data, null, 2)}`;
+                resultDiv.className = 'result success';
+            } else {
+                resultDiv.textContent = `❌ 註冊失敗！\n${JSON.stringify(data, null, 2)}`;
+                resultDiv.className = 'result error';
+            }
+        }
+
+        // API 健康檢查
+        async function testHealth() {
+            const resultDiv = document.getElementById('healthResult');
+            resultDiv.textContent = '正在檢查...';
+            resultDiv.className = 'result';
+
+            const { response, data } = await apiRequest('/api/health');
+
+            if (response.ok) {
+                resultDiv.textContent = `✅ API 正常運行！\n${JSON.stringify(data, null, 2)}`;
+                resultDiv.className = 'result success';
+            } else {
+                resultDiv.textContent = `❌ API 檢查失敗！\n${JSON.stringify(data, null, 2)}`;
+                resultDiv.className = 'result error';
+            }
+        }
+
+        // 頁面載入時自動檢查 API 健康狀態
+        window.onload = function() {
+            testHealth();
+            
+            // 檢查是否有存儲的 token
+            const token = localStorage.getItem('auth_token');
+            if (token) {
+                getCurrentUser();
+            }
+        };
+    </script>
+</body>
+</html> 
