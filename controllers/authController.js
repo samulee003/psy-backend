@@ -252,7 +252,7 @@ const logout = (req, res) => {
 };
 
 // 獲取當前用戶
-const getCurrentUser = (req, res) => {
+const getCurrentUser = (db) => (req, res) => {
   try {
     console.log('[Auth] 獲取當前用戶: ', req.user ? req.user.id : 'No user');
     
@@ -263,15 +263,38 @@ const getCurrentUser = (req, res) => {
       });
     }
 
-    // 注意：我們不回傳密碼
-    res.json({
-      success: true,
-      user: {
-        id: req.user.id,
-        name: req.user.name,
-        email: req.user.email,
-        role: req.user.role
+    // 從資料庫查詢完整的用戶資料，包括 phone 欄位
+    db.get('SELECT id, name, email, role, phone, created_at FROM users WHERE id = ?', [req.user.id], (err, user) => {
+      if (err) {
+        console.error('[Auth] 查詢用戶資料時發生錯誤:', err.message);
+        return res.status(500).json({
+          success: false,
+          error: '獲取用戶資訊時發生錯誤'
+        });
       }
+
+      if (!user) {
+        console.error('[Auth] 用戶不存在:', req.user.id);
+        return res.status(404).json({
+          success: false,
+          error: '用戶不存在'
+        });
+      }
+
+      console.log('[Auth] 成功獲取用戶資料:', { id: user.id, email: user.email, phone: user.phone });
+
+      // 返回完整的用戶資料（不包含密碼）
+      res.json({
+        success: true,
+        user: {
+          id: user.id,
+          name: user.name,
+          email: user.email,
+          role: user.role,
+          phone: user.phone,
+          created_at: user.created_at
+        }
+      });
     });
   } catch (error) {
     console.error('[Auth] 獲取當前用戶時發生錯誤:', error);
@@ -470,7 +493,7 @@ module.exports = (db) => ({
   register: register(db),
   login: login(db),
   logout,
-  getCurrentUser,
+  getCurrentUser: getCurrentUser(db),
   forgotPassword: forgotPassword(db),
   resetPassword: resetPassword(db)
 }); 
