@@ -94,13 +94,34 @@ const createAppointment = (db) => (req, res) => {
             return res.status(404).json({ success: false, error: '患者不存在' });
           }
 
+          // 處理就診者資訊
+          let patientInfoJson = null;
+          if (patientInfo && typeof patientInfo === 'object') {
+            // 如果前端傳來的是物件，直接使用
+            patientInfoJson = JSON.stringify(patientInfo);
+            console.log('[預約日誌] 收到就診者資訊物件:', patientInfo);
+          } else if (patientInfo && typeof patientInfo === 'string') {
+            // 如果是字串，嘗試解析或創建物件
+            try {
+              JSON.parse(patientInfo);
+              patientInfoJson = patientInfo;
+            } catch (e) {
+              // 如果不是有效的 JSON，將其作為姓名
+              patientInfoJson = JSON.stringify({
+                patientName: patientInfo,
+                isActualPatient: true
+              });
+            }
+            console.log('[預約日誌] 處理就診者資訊字串:', patientInfo);
+          }
+
           // 創建預約
           const createQuery = `
             INSERT INTO appointments (
-              doctor_id, patient_id, date, time, notes, status, created_at
-            ) VALUES (?, ?, ?, ?, ?, ?, datetime('now'))
+              doctor_id, patient_id, date, time, notes, status, patient_info, created_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, datetime('now'))
           `;
-          const params = [doctorId, patientId, date, time, note, 'confirmed'];
+          const params = [doctorId, patientId, date, time, note, 'confirmed', patientInfoJson];
           console.log('[預約日誌] 準備執行創建預約SQL:', createQuery, '參數:', params);
 
           db.run(
@@ -187,7 +208,8 @@ const getAppointments = (db) => (req, res) => {
     let query = `
       SELECT a.*, 
           d.name as doctor_name, 
-          p.name as patient_name
+          p.name as patient_name,
+          a.patient_info
       FROM appointments a
       JOIN users d ON a.doctor_id = d.id
       JOIN users p ON a.patient_id = p.id
@@ -234,14 +256,33 @@ const getAppointments = (db) => (req, res) => {
         console.error('獲取預約列表錯誤:', err.message);
         return res.status(500).json({ error: '無法獲取預約列表' });
       }
+      
       const processedAppointments = appointments.map(app => {
-        const { patient_name, doctor_name, ...rest } = app;
+        const { patient_name, doctor_name, patient_info, ...rest } = app;
+        
+        // 處理就診者姓名顯示邏輯
+        let displayPatientName = patient_name; // 預設使用預約人姓名
+        
+        if (patient_info) {
+          try {
+            const patientInfoObj = JSON.parse(patient_info);
+            if (patientInfoObj.patientName) {
+              displayPatientName = patientInfoObj.patientName; // 優先使用就診者姓名
+            }
+          } catch (e) {
+            console.warn('解析 patient_info 失敗:', e.message);
+          }
+        }
+        
         return {
           ...rest,
-          patientName: patient_name,
-          doctorName: doctor_name
+          patientName: displayPatientName,
+          doctorName: doctor_name,
+          actualPatientName: displayPatientName, // 新增欄位，明確表示就診者姓名
+          bookerName: patient_name // 新增欄位，表示預約人姓名
         };
       });
+      
       res.json({ success: true, appointments: processedAppointments });
     });
   } catch (error) {
@@ -437,7 +478,8 @@ const getMyAppointments = (db) => (req, res) => {
     let query = `
       SELECT a.*, 
           d.name as doctor_name, 
-          p.name as patient_name
+          p.name as patient_name,
+          a.patient_info
       FROM appointments a
       JOIN users d ON a.doctor_id = d.id
       JOIN users p ON a.patient_id = p.id
@@ -467,11 +509,28 @@ const getMyAppointments = (db) => (req, res) => {
       
       // 更新：同時處理 patient_name 到 patientName 和 doctor_name 到 doctorName 的映射
       const processedAppointments = appointments.map(app => {
-        const { patient_name, doctor_name, ...rest } = app;
+        const { patient_name, doctor_name, patient_info, ...rest } = app;
+        
+        // 處理就診者姓名顯示邏輯
+        let displayPatientName = patient_name; // 預設使用預約人姓名
+        
+        if (patient_info) {
+          try {
+            const patientInfoObj = JSON.parse(patient_info);
+            if (patientInfoObj.patientName) {
+              displayPatientName = patientInfoObj.patientName; // 優先使用就診者姓名
+            }
+          } catch (e) {
+            console.warn('解析 patient_info 失敗:', e.message);
+          }
+        }
+        
         return {
           ...rest,
-          patientName: patient_name,
-          doctorName: doctor_name
+          patientName: displayPatientName,
+          doctorName: doctor_name,
+          actualPatientName: displayPatientName, // 新增欄位，明確表示就診者姓名
+          bookerName: patient_name // 新增欄位，表示預約人姓名
         };
       });
       
