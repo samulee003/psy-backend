@@ -19,6 +19,7 @@
     "test:verify-data": "node verify-test-data.js"
   },
   "dependencies": {
+    "axios": "^1.9.0",
     "bcrypt": "^6.0.0",
     "bcryptjs": "^3.0.2",
     "connect-sqlite3": "^0.9.15",

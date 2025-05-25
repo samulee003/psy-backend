@@ -1,0 +1,96 @@
+=== 開始分析被污染的數據庫 ===
+數據庫路徑: C:\Users\emily\Downloads\database_to_clean.sqlite
+
+=== 1. 分析 USERS 表 ===
+✅ 成功連接到數據庫
+
+總用戶數: 15
+
+🔍 可疑的測試用戶 (emergency-test-data.js 可能創建的):
+  ❌ ID: 1 | 郵箱: doctor@example.com | 姓名: 測試醫生 | 角色: doctor
+      創建時間: 2025-05-19 10:37:15
+  ❌ ID: 2 | 郵箱: patient@example.com | 姓名: 測試病人 | 角色: patient
+      創建時間: 2025-05-19 10:37:15
+  ❌ ID: 5 | 郵箱: admin@example.com | 姓名: 系統管理員 | 角色: admin
+      創建時間: 2025-05-23 05:09:42
+
+✅ 可能是真實用戶的帳號:
+  ✓ ID: 3 | 郵箱: samu003@gmail.com | 姓名: 李昇恆 | 角色: patient
+      創建時間: 2025-05-19 12:27:12
+  ✓ ID: 4 | 郵箱: [REDACTED]@gmail.com | 姓名: 惠筠心理治療師 | 角色: doctor
+      創建時間: 2025-05-19 12:28:34
+  ✓ ID: 6 | 郵箱: samlei@apm.org.mo | 姓名: samu | 角色: patient
+      創建時間: 2025-05-23 06:41:46
+  ✓ ID: 7 | 郵箱: testing@gmail.com | 姓名: SENG HANG LEI | 角色: patient
+      創建時間: 2025-05-23 07:50:15
+  ✓ ID: 8 | 郵箱: sashahui.cp@gmail.com | 姓名: 李昕 | 角色: patient
+      創建時間: 2025-05-23 08:19:06
+  ✓ ID: 9 | 郵箱: macao.christy@gmail.com | 姓名: Christywong | 角色: patient
+      創建時間: 2025-05-23 08:32:43
+  ✓ ID: 10 | 郵箱: test@gmail.com | 姓名: test | 角色: patient
+      創建時間: 2025-05-23 11:43:30
+  ✓ ID: 11 | 郵箱: laisueme@gmail.com | 姓名: 鄭皓峰 | 角色: patient
+      創建時間: 2025-05-24 07:12:31
+  ✓ ID: 12 | 郵箱: abcdef2012cn@gmail.com | 姓名: 江之妍 | 角色: patient
+      創建時間: 2025-05-24 08:59:52
+  ✓ ID: 13 | 郵箱: deri_me@hotmail.com | 姓名: aa | 角色: patient
+      創建時間: 2025-05-24 09:39:37
+  ✓ ID: 14 | 郵箱: utsim.lam@gmail.com | 姓名: Chong Weng Hou Michael | 角色: patient
+      創建時間: 2025-05-24 10:05:01
+  ✓ ID: 15 | 郵箱: abc@gmail.com | 姓名: abc | 角色: patient
+      創建時間: 2025-05-24 14:24:51
+
+=== 2. 分析 SCHEDULE 表 ===
+總排班記錄數: 77
+
+🔍 2025年5月排班記錄數 (疑似測試數據): 14
+2025年5月排班詳情:
+  ID: 164 | 日期: 2025-05-01 | 醫生ID: 1 | 時間: 09:00-12:00
+  ID: 8 | 日期: 2025-05-02 | 醫生ID: 1 | 時間: 09:00-12:00
+  ID: 9 | 日期: 2025-05-05 | 醫生ID: 1 | 時間: 09:00-12:00
+  ID: 10 | 日期: 2025-05-07 | 醫生ID: 1 | 時間: 09:00-12:00
+  ID: 11 | 日期: 2025-05-09 | 醫生ID: 1 | 時間: 09:00-12:00
+  ID: 12 | 日期: 2025-05-12 | 醫生ID: 1 | 時間: 09:00-12:00
+  ID: 13 | 日期: 2025-05-14 | 醫生ID: 1 | 時間: 09:00-12:00
+  ID: 14 | 日期: 2025-05-16 | 醫生ID: 1 | 時間: 09:00-12:00
+  ID: 15 | 日期: 2025-05-19 | 醫生ID: 1 | 時間: 09:00-12:00
+  ID: 16 | 日期: 2025-05-21 | 醫生ID: 1 | 時間: 09:00-12:00
+  ... 還有 4 筆記錄
+
+按醫生ID分組的排班統計:
+  ❌ 醫生ID 1 (doctor@example.com (測試醫生)): 14 筆排班
+  ✓ 醫生ID 4 ([REDACTED]@gmail.com (惠筠心理治療師)): 63 筆排班
+
+=== 3. 分析 APPOINTMENTS 表 ===
+總預約記錄數: 54
+
+前5筆預約記錄:
+  預約ID: 6 | 患者: samu003@gmail.com | 醫生: [REDACTED]@gmail.com
+    日期: 2025-07-01 | 時間: 14:00 | 狀態: cancelled
+  預約ID: 11 | 患者: samu003@gmail.com | 醫生: [REDACTED]@gmail.com
+    日期: 2025-07-01 | 時間: 14:00 | 狀態: cancelled
+  預約ID: 49 | 患者: test@gmail.com | 醫生: [REDACTED]@gmail.com
+    日期: 2025-07-02 | 時間: 14:00 | 狀態: cancelled
+  預約ID: 16 | 患者: macao.christy@gmail.com | 醫生: [REDACTED]@gmail.com
+    日期: 2025-07-02 | 時間: 17:00 | 狀態: confirmed
+  預約ID: 41 | 患者: utsim.lam@gmail.com | 醫生: [REDACTED]@gmail.com
+    日期: 2025-07-02 | 時間: 18:30 | 狀態: confirmed
+  ... 還有 49 筆預約
+
+=== 4. 清理建議 ===
+🗑️  建議刪除的測試用戶:
+  - ID 1: doctor@example.com (測試醫生) - 角色: doctor
+  - ID 2: patient@example.com (測試病人) - 角色: patient
+  - ID 5: admin@example.com (系統管理員) - 角色: admin
+
+🗑️  建議刪除的2025年5月排班記錄:
+  總共 14 筆測試醫生的排班需要刪除
+  - 排班ID 164: 2025-05-01, 醫生ID 1
+  - 排班ID 8: 2025-05-02, 醫生ID 1
+  - 排班ID 9: 2025-05-05, 醫生ID 1
+  - 排班ID 10: 2025-05-07, 醫生ID 1
+  - 排班ID 11: 2025-05-09, 醫生ID 1
+  - ... 還有 9 筆
+
+⚠️  請仔細檢查以上分析結果，確認哪些數據是真實的，哪些需要刪除。
+   特別注意: 如果您的真實醫生帳號恰好是 doctor@example.com，請勿刪除！
