@@ -3,6 +3,10 @@
  */
 console.log('[APP] 程式開始執行...');
 
+// 加載環境變數
+require('dotenv').config();
+console.log('[APP] 環境變數已載入');
+
 const express = require('express');
 console.log('[APP] Express 已載入');
 const cors = require('cors');
