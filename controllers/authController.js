@@ -25,10 +25,13 @@ const register = (db) => async (req, res) => {
 
     console.log('[Auth] 開始處理註冊請求:', { name, email: userEmail, role });
 
-    // 驗證必填欄位
-    if (!name || !userEmail || !password) {
-      return res.status(400).json({ success: false, error: '姓名、電子郵件和密碼都是必填的' });
+    // 驗證必填欄位 - 簡化註冊：只需要電子郵件和密碼
+    if (!userEmail || !password) {
+      return res.status(400).json({ success: false, error: '電子郵件和密碼都是必填的' });
     }
+    
+    // 如果沒有提供姓名，使用電子郵件的用戶名部分作為預設姓名
+    const userName = name || userEmail.split('@')[0];
 
     // **修復：更嚴格的重複註冊檢查**
     console.log('[Auth] 檢查電子郵件是否已存在:', userEmail);
@@ -70,7 +73,7 @@ const register = (db) => async (req, res) => {
 
         // 準備插入數據
         const fields = ['name', 'email', 'username', 'password', 'role'];
-        const values = [name, userEmail, userEmail, hashedPassword, role];
+        const values = [userName, userEmail, userEmail, hashedPassword, role];
         let placeholders = '?, ?, ?, ?, ?';
         
         // 如果提供了電話號碼，加入到查詢中
@@ -87,7 +90,7 @@ const register = (db) => async (req, res) => {
           VALUES (${placeholders}, datetime('now'))
         `;
         
-        console.log('[Auth] 準備創建新用戶:', { name, email: userEmail, role });
+        console.log('[Auth] 準備創建新用戶:', { name: userName, email: userEmail, role });
         
         // 插入新用戶
         db.run(query, values, function(err) {
@@ -111,7 +114,7 @@ const register = (db) => async (req, res) => {
 
           // 生成JWT令牌
           const token = jwt.sign(
-            { id: this.lastID, name, email: userEmail, role },
+            { id: this.lastID, name: userName, email: userEmail, role },
             JWT_SECRET,
             { expiresIn: '24h' }
           );
@@ -135,7 +138,7 @@ const register = (db) => async (req, res) => {
             message: '註冊成功',
             user: {
               id: this.lastID,
-              name,
+              name: userName,
               email: userEmail,
               role,
               phone: phone || null
