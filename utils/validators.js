@@ -162,8 +162,8 @@ const validateAppointment = (appointmentData) => {
  * @returns {Object} - 驗證結果 {isValid, error}
  */
 const validateUser = (userData) => {
-  // 檢查必填欄位
-  const requiredFields = ['name', 'email', 'password'];
+  // 檢查必填欄位 - 簡化註冊：只有 email 和 password 是必填的
+  const requiredFields = ['email', 'password'];
   const requiredCheck = validateRequired(userData, requiredFields);
   if (!requiredCheck.isValid) {
     return requiredCheck;
