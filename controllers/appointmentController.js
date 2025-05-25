@@ -266,8 +266,8 @@ const getAppointments = (db) => (req, res) => {
         if (patient_info) {
           try {
             const patientInfoObj = JSON.parse(patient_info);
-            if (patientInfoObj.patientName) {
-              displayPatientName = patientInfoObj.patientName; // 優先使用就診者姓名
+            if (patientInfoObj.name) {
+              displayPatientName = patientInfoObj.name; // 優先使用就診者姓名
             }
           } catch (e) {
             console.warn('解析 patient_info 失敗:', e.message);
@@ -517,8 +517,8 @@ const getMyAppointments = (db) => (req, res) => {
         if (patient_info) {
           try {
             const patientInfoObj = JSON.parse(patient_info);
-            if (patientInfoObj.patientName) {
-              displayPatientName = patientInfoObj.patientName; // 優先使用就診者姓名
+            if (patientInfoObj.name) {
+              displayPatientName = patientInfoObj.name; // 優先使用就診者姓名
             }
           } catch (e) {
             console.warn('解析 patient_info 失敗:', e.message);
