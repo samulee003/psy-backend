@@ -2,7 +2,7 @@ console.log('Script find-demo-users.js started.');
 
 const sqlite3 = require('sqlite3').verbose();
 const path = require('path');
-const dbPath = path.resolve(__dirname, 'database.sqlite');
+const dbPath = path.join(__dirname, 'database.sqlite');
 
 console.log(`Attempting to connect to database at: ${dbPath}`);
 
@@ -31,32 +31,64 @@ const db = new sqlite3.Database(dbPath, sqlite3.OPEN_READWRITE, (err) => {
       }
     }
 
-    // 然後執行查詢
-    const searchTerm = '%demo%';
-    const query = ` 
-      SELECT id, name, email, role 
-      FROM users 
-      WHERE name LIKE ? OR email LIKE ?
-    `; // 假設 email 欄位存在，後面根據表結構調整
+    // 用戶提到的郵箱
+    const searchEmails = [
+      'testing@gmail.com',
+      'samu003@gmail.com', 
+      'test@gmail.com',
+      'sasha0970@gmail.com'
+    ];
 
-    db.all(query, [searchTerm, searchTerm], (queryErr, rows) => {
-      if (queryErr) {
-        console.error("Error querying users table:", queryErr.message);
-      } else {
-        if (rows && rows.length > 0) {
-          console.log("\nFound potential 'Demo' users:");
-          rows.forEach((row) => {
-            // 檢查欄位是否存在再打印
-            const id = row.id !== undefined ? row.id : 'N/A';
-            const name = row.name !== undefined ? row.name : 'N/A';
-            const email = row.email !== undefined ? row.email : 'N/A';
-            const role = row.role !== undefined ? row.role : 'N/A';
-            console.log(`ID: ${id}, Name: ${name}, Email: ${email}, Role: ${role}`);
-          });
-        } else {
-          console.log("\nNo users found matching 'demo' in name or email, or query returned no results.");
-        }
+    console.log('搜尋以下郵箱:', searchEmails.join(', '), '\n');
+
+    // 查詢所有用戶
+    db.all('SELECT * FROM users ORDER BY id', [], (err, users) => {
+      if (err) {
+        console.error('查詢失敗:', err.message);
+        return;
       }
+      
+      console.log(`當前數據庫總用戶數: ${users.length}\n`);
+      
+      console.log('=== 所有用戶列表 ===');
+      users.forEach(user => {
+        console.log(`ID: ${user.id} | 郵箱: ${user.email} | 姓名: ${user.name} | 角色: ${user.role} | 創建: ${user.created_at}`);
+      });
+      
+      console.log('\n=== 搜尋結果 ===');
+      searchEmails.forEach(email => {
+        const user = users.find(u => u.email === email);
+        if (user) {
+          console.log(`✅ 找到 ${email}:`);
+          console.log(`   ID: ${user.id}, 姓名: ${user.name}, 角色: ${user.role}, 創建: ${user.created_at}`);
+        } else {
+          console.log(`❌ 未找到 ${email}`);
+        }
+      });
+      
+      // 檢查是否有其他可疑的數據變更
+      console.log('\n=== 數據分析 ===');
+      
+      // 檢查 ID 3 和 ID 4 的實際數據
+      const user3 = users.find(u => u.id === 3);
+      const user4 = users.find(u => u.id === 4);
+      
+      if (user3) {
+        console.log(`ID 3 實際用戶: ${user3.email} (${user3.name}) - ${user3.role}`);
+      }
+      
+      if (user4) {
+        console.log(`ID 4 實際用戶: ${user4.email} (${user4.name}) - ${user4.role}`);
+      }
+      
+      // 檢查今天的變更
+      const today = '2025-05-24';
+      const todayUsers = users.filter(u => u.created_at && u.created_at.startsWith(today));
+      console.log(`\n今天創建的用戶數: ${todayUsers.length}`);
+      todayUsers.forEach(u => {
+        console.log(`  - ${u.email} (ID: ${u.id}) - ${u.created_at}`);
+      });
+      
       db.close((closeErr) => {
         if (closeErr) {
           console.error("Error closing database:", closeErr.message);

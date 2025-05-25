@@ -1,0 +1,31 @@
+=== 第一步：清理測試用戶 ===
+數據庫路徑: C:\Users\emily\Downloads\database_to_clean.sqlite
+
+🔍 準備刪除以下測試用戶:
+✅ 成功連接到數據庫
+  - doctor@example.com: 未找到
+  - patient@example.com: 未找到
+  - admin@example.com: 未找到
+
+🗑️  開始刪除測試用戶...
+⚠️  用戶不存在或已被刪除: doctor@example.com
+⚠️  用戶不存在或已被刪除: patient@example.com
+⚠️  用戶不存在或已被刪除: admin@example.com
+
+✅ 第一步完成！總共刪除了 0 個測試用戶
+
+🔍 驗證結果 - 剩餘用戶列表:
+  ✓ ID: 3 | 郵箱: samu003@gmail.com | 姓名: 李昇恆 | 角色: patient
+  ✓ ID: 4 | 郵箱: sasha0970@gmail.com | 姓名: 惠筠心理治療師 | 角色: doctor
+  ✓ ID: 6 | 郵箱: samlei@apm.org.mo | 姓名: samu | 角色: patient
+  ✓ ID: 7 | 郵箱: testing@gmail.com | 姓名: SENG HANG LEI | 角色: patient
+  ✓ ID: 8 | 郵箱: sashahui.cp@gmail.com | 姓名: 李昕 | 角色: patient
+  ✓ ID: 9 | 郵箱: macao.christy@gmail.com | 姓名: Christywong | 角色: patient
+  ✓ ID: 10 | 郵箱: test@gmail.com | 姓名: test | 角色: patient
+  ✓ ID: 11 | 郵箱: laisueme@gmail.com | 姓名: 鄭皓峰 | 角色: patient
+  ✓ ID: 12 | 郵箱: abcdef2012cn@gmail.com | 姓名: 江之妍 | 角色: patient
+  ✓ ID: 13 | 郵箱: deri_me@hotmail.com | 姓名: aa | 角色: patient
+  ✓ ID: 14 | 郵箱: utsim.lam@gmail.com | 姓名: Chong Weng Hou Michael | 角色: patient
+  ✓ ID: 15 | 郵箱: abc@gmail.com | 姓名: abc | 角色: patient
+
+✅ 第一步清理完成！接下來可以執行第二步（清理測試排班數據）
