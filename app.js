@@ -87,11 +87,33 @@ console.log('[APP] CORS 中間件已註冊');
 // **新增：手動處理 OPTIONS 預檢請求**
 app.options('*', (req, res) => {
   console.log('[CORS] 處理 OPTIONS 預檢請求:', req.method, req.path);
-  res.header('Access-Control-Allow-Origin', req.headers.origin || '*');
+  const origin = req.headers.origin;
+  
+  // 設置 CORS headers
+  if (origin) {
+    res.header('Access-Control-Allow-Origin', origin);
+  } else {
+    res.header('Access-Control-Allow-Origin', '*');
+  }
+  
   res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS, HEAD, PATCH');
   res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With, Accept, Origin');
   res.header('Access-Control-Allow-Credentials', 'true');
   res.sendStatus(200);
+});
+
+// **新增：為所有回應添加 CORS headers**
+app.use((req, res, next) => {
+  const origin = req.headers.origin;
+  
+  if (origin) {
+    res.header('Access-Control-Allow-Origin', origin);
+  }
+  
+  res.header('Access-Control-Allow-Credentials', 'true');
+  res.header('Access-Control-Expose-Headers', 'Content-Range,X-Content-Range');
+  
+  next();
 });
 
 console.log('[APP] 準備註冊 JSON 和 URL-encoded 中間件...');

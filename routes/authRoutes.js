@@ -39,6 +39,9 @@ module.exports = (db) => {
   // Google 註冊
   router.post('/google/register', googleAuthController.googleRegister);
 
+  // Google OAuth 回調端點 (處理 authorization code)
+  router.post('/google/callback', googleAuthController.googleCallback);
+
   // 檢查 Google OAuth 配置狀態
   router.get('/google/config', googleAuthController.checkGoogleOAuthConfig);
 
