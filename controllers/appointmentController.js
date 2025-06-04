@@ -36,9 +36,19 @@ const createAppointment = (db) => (req, res) => {
     const note = reason || notes || '';
     const clientTimezone = timezone || 'Asia/Hong_Kong';
     
+    // 處理 isNewPatient 布林值
+    let isNewPatientBool = false;
+    if (typeof isNewPatient === 'boolean') {
+      isNewPatientBool = isNewPatient;
+    } else if (typeof isNewPatient === 'string') {
+      // 如果前端發送字串，轉換為布林值
+      isNewPatientBool = isNewPatient === 'true' || isNewPatient === 'yes';
+    }
+    
     console.log('[預約日誌] 收到的請求體 req.body:', req.body);
     console.log('[預約日誌] 當前登入用戶 req.user:', req.user);
     console.log('[預約日誌] 使用時區:', clientTimezone);
+    console.log('[預約日誌] 是否初診患者:', isNewPatientBool, '(原值:', isNewPatient, ')');
 
     // 檢查該醫生在該時間段是否已經有預約
     const checkQuery = `
@@ -115,13 +125,13 @@ const createAppointment = (db) => (req, res) => {
             console.log('[預約日誌] 處理就診者資訊字串:', patientInfo);
           }
 
-          // 創建預約
+          // 創建預約 - 包含 isNewPatient 欄位
           const createQuery = `
             INSERT INTO appointments (
-              doctor_id, patient_id, date, time, notes, status, patient_info, created_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, datetime('now'))
+              doctor_id, patient_id, date, time, notes, status, patient_info, isNewPatient, created_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
           `;
-          const params = [doctorId, patientId, date, time, note, 'confirmed', patientInfoJson];
+          const params = [doctorId, patientId, date, time, note, 'confirmed', patientInfoJson, isNewPatientBool];
           console.log('[預約日誌] 準備執行創建預約SQL:', createQuery, '參數:', params);
 
           db.run(
@@ -133,6 +143,7 @@ const createAppointment = (db) => (req, res) => {
                 return res.status(500).json({ success: false, error: '無法創建預約' });
               }
               console.log('[預約日誌] 創建預約成功，影響行數:', this.changes, '最後插入ID:', this.lastID);
+              console.log('[預約日誌] isNewPatient 儲存值:', isNewPatientBool);
               
               const newAppointmentId = this.lastID;
 
@@ -172,7 +183,7 @@ const createAppointment = (db) => (req, res) => {
                 console.error('[預約日誌] 郵件服務錯誤:', emailError);
               }
                 
-              // 返回成功響應，包含預約 ID
+              // 返回成功響應，包含預約 ID 和 isNewPatient 資訊
               res.status(201).json({
                 success: true,
                 appointment: {
@@ -182,7 +193,8 @@ const createAppointment = (db) => (req, res) => {
                   date: date,
                   time: time,
                   status: 'confirmed',
-                  notes: note
+                  notes: note,
+                  isNewPatient: isNewPatientBool
                 },
                 message: '預約創建成功'
               });
@@ -274,12 +286,20 @@ const getAppointments = (db) => (req, res) => {
           }
         }
         
+        // 確保 isNewPatient 欄位被正確處理
+        let isNewPatientValue = false;
+        if (app.isNewPatient !== undefined && app.isNewPatient !== null) {
+          // 處理 SQLite 中的布林值（可能是 0/1 或 true/false）
+          isNewPatientValue = app.isNewPatient === 1 || app.isNewPatient === true || app.isNewPatient === 'true';
+        }
+        
         return {
           ...rest,
           patientName: displayPatientName,
           doctorName: doctor_name,
           actualPatientName: displayPatientName, // 新增欄位，明確表示就診者姓名
-          bookerName: patient_name // 新增欄位，表示預約人姓名
+          bookerName: patient_name, // 新增欄位，表示預約人姓名
+          isNewPatient: isNewPatientValue // 確保 isNewPatient 欄位被包含
         };
       });
       
@@ -525,12 +545,20 @@ const getMyAppointments = (db) => (req, res) => {
           }
         }
         
+        // 確保 isNewPatient 欄位被正確處理
+        let isNewPatientValue = false;
+        if (app.isNewPatient !== undefined && app.isNewPatient !== null) {
+          // 處理 SQLite 中的布林值（可能是 0/1 或 true/false）
+          isNewPatientValue = app.isNewPatient === 1 || app.isNewPatient === true || app.isNewPatient === 'true';
+        }
+        
         return {
           ...rest,
           patientName: displayPatientName,
           doctorName: doctor_name,
           actualPatientName: displayPatientName, // 新增欄位，明確表示就診者姓名
-          bookerName: patient_name // 新增欄位，表示預約人姓名
+          bookerName: patient_name, // 新增欄位，表示預約人姓名
+          isNewPatient: isNewPatientValue // 確保 isNewPatient 欄位被包含
         };
       });
       

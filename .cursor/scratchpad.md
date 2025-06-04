@@ -1311,56 +1311,132 @@ https://therapy-booking.zeabur.app/auth/google/callback
   - 與現有認證系統完全整合
 
 **📈 測試結果：**
-- ✅ 配置端點正常工作
-- ✅ 參數驗證完全正確（缺少 code、無效 mode、無效 role）
-- ✅ OAuth 流程邏輯健全（預期的模擬 code 失敗）
-- ✅ 不同模式參數組合驗證正常
-- ✅ 錯誤處理適當且用戶友好
+```
+✅ 配置端點正常，Client ID 已設置
+✅ 正確拒絕缺少 authorization code 的請求
+✅ 正確拒絕無效的認證模式
+✅ 回調端點正常工作（預期的 OAuth 認證失敗）
+✅ 註冊模式參數驗證正常
+✅ 登入模式參數驗證正常
+✅ 正確拒絕無效的用戶角色
+```
 
-**🎯 準備就緒的功能：**
-1. **登入流程**：
-   ```javascript
-   POST /api/auth/google/callback
-   {
-     "code": "google_authorization_code",
-     "mode": "login"
-   }
-   ```
+**🎯 準備就緒狀態：**
+- ✅ 後端端點完全實施並測試通過
+- ✅ API 文檔完成（`GOOGLE_OAUTH_API.md`）
+- ✅ 測試套件完整且運行正常
+- ✅ 與現有系統無縫整合
+- ✅ 錯誤處理和安全機制完備
 
-2. **註冊流程**：
-   ```javascript
-   POST /api/auth/google/callback
-   {
-     "code": "google_authorization_code", 
-     "mode": "register",
-     "role": "patient"
-   }
-   ```
+**📝 後續工作建議：**
+1. 前端整合測試：使用真實的 Google authorization code 進行端到端測試
+2. 生產環境配置：確保 Google Cloud Console 中的重定向 URI 設置正確
+3. 用戶體驗測試：驗證登入/註冊流程的用戶體驗
 
-**📋 前端整合要求：**
-- 前端需要使用新的 `/api/auth/google/callback` 端點
-- 替換現有的 ID Token 驗證流程為 Authorization Code 流程
-- 確保傳送正確的 `mode` 和 `role` 參數
-- 處理返回的 `user` 物件和認證狀態
+### 📦 Git 推送完成 (2025-01-26)
 
-**⚠️ 部署注意事項：**
-1. **Google Cloud Console 配置**：
-   - 需要在重定向 URI 中添加前端域名
-   - 開發環境：`http://localhost:8080`
-   - 生產環境：`https://your-domain.zeabur.app`
+**✅ 代碼已成功推送到遠程倉庫**
 
-2. **環境變數要求**：
-   - `GOOGLE_CLIENT_ID`：必須設定
-   - `GOOGLE_CLIENT_SECRET`：必須設定（僅後端使用）
+**📊 推送詳情：**
+- **提交訊息**：`feat: 實施 Google OAuth authorization code 回調端點`
+- **推送結果**：29 個物件，20 個新物件，6 個增量變更
+- **遠程倉庫**：https://github.com/samulee003/psy-backend.git
+- **分支**：main -> main
+- **提交 ID**：b5847b2
 
-**🏁 完成狀態：**
-- ✅ 後端 OAuth 回調端點：100% 完成
-- ✅ 測試驗證：100% 通過
-- ✅ 文件和日誌：完整
-- 🔄 前端整合：待前端團隊實施
-- 🔄 生產環境配置：待部署時設定
+**📋 推送包含的文件：**
+- ✅ `controllers/googleAuthController.js` - 新增 OAuth 回調功能
+- ✅ `routes/authRoutes.js` - 新增回調路由
+- ✅ `test-google-oauth-callback.js` - 完整測試套件
+- ✅ `GOOGLE_OAUTH_API.md` - API 文檔
+- ✅ `.cursor/scratchpad.md` - 專案進度記錄
+- ✅ 其他相關配置和測試文件
 
-**🎉 成果總結：**
-根據前端的新 OAuth 流程需求，後端已成功實施了完整的 authorization code 處理機制。新端點與現有認證系統完全兼容，支援登入和註冊兩種模式，並包含完整的錯誤處理。系統現在準備好處理來自前端 GoogleLoginButton 組件的真實 OAuth 請求。
+**🎉 當前狀態：**
+所有 Google OAuth authorization code 流程的後端實施工作已完成並安全推送到版本控制系統中。前端可以開始整合新的回調端點進行測試。
 
-### 🔧 npm start 腳本修復完成 (2025-01-26)
+### 🩺 初診預約功能後端修復完成 (2025-06-05)
+
+**✅ 初診預約功能 - 修復成功！**
+
+**📊 修復成果：**
+根據前端團隊的修正（將驗證邏輯從錯誤的 `if (!bookingDetails.isNewPatient)` 改為正確檢查 `'yes'` 或 `'no'` 值），後端已完成相應的配合修復：
+
+**🔧 資料庫遷移：**
+- ✅ **新增欄位**：成功添加 `isNewPatient BOOLEAN DEFAULT FALSE` 欄位到 `appointments` 表
+- ✅ **欄位驗證**：通過 `check-appointments-schema.js` 確認欄位正確添加
+- ✅ **資料完整性**：現有預約記錄的 `isNewPatient` 預設為 `false`
+
+**🔧 後端 API 修復：**
+
+1. **`createAppointment` 函數增強**：
+   - ✅ 新增 `isNewPatient` 參數處理
+   - ✅ 支援布林值和字串轉換（`'true'`/`'yes'` → `true`）
+   - ✅ 更新 SQL 插入語句包含 `isNewPatient` 欄位
+   - ✅ 在響應中返回 `isNewPatient` 資訊
+
+2. **`getAppointments` 和 `getMyAppointments` 函數增強**：
+   - ✅ 正確處理 SQLite 中的布林值（0/1 轉換為 true/false）
+   - ✅ 在返回的預約列表中包含 `isNewPatient` 欄位
+   - ✅ 確保就診者姓名正確顯示
+
+**📈 測試結果：**
+```
+✅ 初診預約創建成功 - ID: 55, isNewPatient: true
+✅ 非初診預約創建成功 - ID: 56, isNewPatient: false
+✅ 查詢我的預約功能正常 - 正確顯示 isNewPatient 狀態
+✅ 字串形式 isNewPatient 測試成功 - 'true' 正確轉換為 true
+✅ 就診者姓名正確顯示（區分預約人和就診者）
+```
+
+**🎯 支援的前端資料格式：**
+```javascript
+{
+  patientId: user.id,
+  doctorId: bookingDetails.doctorId,
+  appointmentDate: "2025-06-05",
+  timeSlot: "14:00",
+  reason: "壓力、焦慮",
+  notes: "希望了解放鬆技巧",
+  isNewPatient: true, // 布林值：true=初診，false=非初診
+  patientInfo: {
+    name: "患者姓名",
+    phone: "預約人電話",
+    email: "預約人郵箱",
+    gender: "male",
+    birthDate: "1990-01-01"
+  }
+}
+```
+
+**📁 修復的文件清單：**
+- ✅ `add-is-new-patient-field.js` - 資料庫遷移腳本
+- ✅ `controllers/appointmentController.js` - 核心業務邏輯修復
+- ✅ `test-is-new-patient-feature.js` - 完整功能測試套件
+- ✅ `check-appointments-schema.js` - 資料庫結構驗證工具
+- ✅ `simple-schema-check.js` - 簡易檢查工具
+
+**🔧 技術實現細節：**
+1. **布林值處理**：支援前端傳送布林值或字串（`'true'`, `'yes'`）
+2. **資料庫儲存**：使用 SQLite BOOLEAN 類型，確保資料一致性
+3. **向後相容**：現有預約記錄自動設為非初診（`false`）
+4. **就診者資訊**：正確區分預約人和實際就診者姓名
+5. **驗證邏輯**：與前端配合，移除過時的驗證規則
+
+**🚀 準備就緒狀態：**
+- ✅ 後端 API 完全支援初診/非初診預約
+- ✅ 資料庫結構已更新
+- ✅ 測試套件完整且通過
+- ✅ 與前端修正完全同步
+- ✅ 向後相容性確保
+
+**📋 後續建議：**
+1. **前端整合測試**：確認前端和後端的 `isNewPatient` 處理邏輯一致
+2. **用戶驗收測試**：邀請用戶測試初診預約流程
+3. **資料驗證**：定期檢查資料庫中 `isNewPatient` 欄位的資料完整性
+
+**🎯 修復目標達成率：100%**
+
+初診預約功能的後端修復已完全完成，系統現在能夠正確處理和儲存初診/非初診狀態，並與前端的驗證邏輯修正完美配合。
+
+**🔍 醫生端預約顯示問題修復 (2025-01-15):** ✅ **已完成**
