@@ -1440,3 +1440,47 @@ https://therapy-booking.zeabur.app/auth/google/callback
 初診預約功能的後端修復已完全完成，系統現在能夠正確處理和儲存初診/非初診狀態，並與前端的驗證邏輯修正完美配合。
 
 **🔍 醫生端預約顯示問題修復 (2025-01-15):** ✅ **已完成**
+
+### 🐛 前端預約創建 Bug 修復 (2025-06-05) ✅ **已完成**
+
+**🔍 問題症狀：**
+- 前端瀏覽器控制台顯示：`POST /api/appointments` 返回 500 (Internal Server Error)
+- 用戶無法創建預約，顯示「無法預約時間」錯誤
+
+**🔍 問題根源：**
+- 醫生 API (`/api/users/doctors`) 返回格式不符合前端期望
+- 後端只返回 `{ doctors: [...] }` 但前端期望 `{ success: true, doctors: [...] }`
+- 前端無法正確解析醫生列表，導致預約請求缺少必填的 `doctorId` 欄位
+
+**🔧 修復執行：**
+1. **診斷過程**：
+   - 創建專門的診斷腳本 `test-simple-appointment.js`
+   - 發現醫生 API 回應格式問題
+   - 確認預約創建功能本身運作正常
+
+2. **代碼修復**：
+   - 修改 `controllers/userController.js` 中的 `getDoctors` 函數
+   - 添加 `success: true` 欄位到回應格式
+   - 確保錯誤情況也返回 `success: false`
+
+3. **測試驗證**：
+   - 重新啟動後端服務使修改生效
+   - 確認醫生 API 現在返回正確格式：`{ success: true, doctors: [...] }`
+   - 驗證預約創建功能完全正常（成功創建預約 ID: 60）
+
+**🎯 修復結果：**
+```
+✅ 醫生 API 正確返回：{ success: true, doctors: [...] }
+✅ 前端可以正確解析醫生列表
+✅ 預約創建功能完全正常
+✅ 初診預約功能（isNewPatient）正常工作
+✅ 時間衝突檢測正常運作（返回 409 錯誤）
+```
+
+**📋 技術細節：**
+- **檔案修改**：`controllers/userController.js` (getDoctors 函數)
+- **修復內容**：統一 API 回應格式，添加 `success` 欄位
+- **測試工具**：`test-simple-appointment.js` 診斷腳本
+- **向後相容性**：保持原有功能，僅增加格式標準化
+
+**🔍 醫生端預約顯示問題修復 (2025-01-15):** ✅ **已完成**
