@@ -317,10 +317,10 @@ const getDoctors = (db) => (req, res) => {
       if (err) {
         console.error('[ERROR] SQL error in getDoctors:', err.message);
         console.error('[ERROR] Failed Query in getDoctors:', query);
-        return res.status(500).json({ error: '無法獲取醫生列表' });
+        return res.status(500).json({ success: false, error: '無法獲取醫生列表' });
       }
       console.log('[DEBUG] getDoctors successful, result count:', doctors ? doctors.length : 0);
-      res.json({ doctors: doctors || [] }); 
+      res.json({ success: true, doctors: doctors || [] }); 
     });
   });
 };
