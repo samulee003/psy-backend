@@ -134,17 +134,4 @@ db.all("PRAGMA table_info(appointments)", (err, columns) => {
   });
 });
 
-// 執行修復
-if (require.main === module) {
-  fixProductionDatabase()
-    .then(result => {
-      console.log(`\n✅ 修復完成: ${result}`);
-      process.exit(0);
-    })
-    .catch(error => {
-      console.error('\n❌ 修復失敗:', error.message);
-      process.exit(1);
-    });
-}
-
-module.exports = { fixProductionDatabase }; 
+// 腳本會自動執行上面的檢查和修復邏輯 
