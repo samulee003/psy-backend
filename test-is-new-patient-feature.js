@@ -64,6 +64,12 @@ const EXISTING_PATIENT_APPOINTMENT = {
   }
 };
 
+// 真實用戶憑證（李昇恆）
+const REAL_USER = {
+  email: 'samu003@gmail.com',
+  password: 'sam003'
+};
+
 async function runTests() {
   try {
     console.log('🧪 開始測試初診預約功能...\n');
@@ -213,9 +219,119 @@ async function runTests() {
   }
 }
 
+async function testRealUserAppointment() {
+  try {
+    console.log('🎯 測試真實用戶初診預約功能\n');
+    
+    // 1. 登入
+    console.log('1️⃣ 真實用戶登入...');
+    const loginResponse = await axios.post(`${BASE_URL}/api/auth/login`, REAL_USER);
+    if (!loginResponse.data.success) {
+      console.log('❌ 登入失敗:', loginResponse.data.error);
+      return;
+    }
+    
+    const token = loginResponse.data.token;
+    const user = loginResponse.data.user;
+    const headers = {
+      'Authorization': `Bearer ${token}`,
+      'Content-Type': 'application/json'
+    };
+    console.log('✅ 登入成功:', user.name, `(ID: ${user.id})`);
+    
+    // 2. 獲取醫生列表
+    console.log('\n2️⃣ 獲取醫生列表...');
+    const doctorsResponse = await axios.get(`${BASE_URL}/api/users/doctors`, { headers });
+    if (!doctorsResponse.data.success) {
+      console.log('❌ 獲取醫生列表失敗');
+      return;
+    }
+    
+    const doctors = doctorsResponse.data.doctors;
+    // 使用惠筠心理治療師 (ID: 4)
+    const doctor = doctors.find(d => d.id === 4);
+    if (!doctor) {
+      console.log('❌ 找不到惠筠心理治療師');
+      return;
+    }
+    console.log('✅ 醫生列表獲取成功，使用醫生:', doctor.name, `(ID: ${doctor.id})`);
+    
+    // 3. 測試初診預約創建（使用不同的時間段）
+    console.log('\n3️⃣ 測試初診預約創建...');
+    const newPatientAppointment = {
+      doctorId: doctor.id,
+      patientId: user.id,
+      appointmentDate: '2025-08-20',
+      timeSlot: '16:00',
+      reason: '心理諮詢初診',
+      notes: '第一次心理治療預約',
+      isNewPatient: true,
+      patientInfo: {
+        name: '李昇恆',
+        phone: '62998036',
+        email: 'samu003@gmail.com',
+        gender: 'male',
+        birthDate: '1995-01-01'
+      }
+    };
+    
+    try {
+      const newPatientResponse = await axios.post(`${BASE_URL}/api/appointments`, newPatientAppointment, { headers });
+      if (newPatientResponse.data.success) {
+        console.log('✅ 初診預約創建成功');
+        console.log('📊 預約ID:', newPatientResponse.data.appointment.id);
+        console.log('🩺 isNewPatient:', newPatientResponse.data.appointment.isNewPatient);
+        console.log('👤 就診者:', JSON.parse(newPatientResponse.data.appointment.patient_info).name);
+      } else {
+        console.log('❌ 初診預約創建失敗:', newPatientResponse.data.error);
+      }
+    } catch (error) {
+      console.log('❌ 初診預約創建錯誤:', error.response?.data?.error || error.message);
+      console.log('🔍 詳細錯誤:', error.response?.data);
+    }
+    
+    // 4. 測試非初診預約創建
+    console.log('\n4️⃣ 測試非初診預約創建...');
+    const existingPatientAppointment = {
+      doctorId: doctor.id,
+      patientId: user.id,
+      appointmentDate: '2025-08-21',
+      timeSlot: '15:00',
+      reason: '心理諮詢複診',
+      notes: '後續心理治療預約',
+      isNewPatient: false,
+      patientInfo: {
+        name: '李昇恆',
+        phone: '62998036',
+        email: 'samu003@gmail.com'
+      }
+    };
+    
+    try {
+      const existingPatientResponse = await axios.post(`${BASE_URL}/api/appointments`, existingPatientAppointment, { headers });
+      if (existingPatientResponse.data.success) {
+        console.log('✅ 非初診預約創建成功');
+        console.log('📊 預約ID:', existingPatientResponse.data.appointment.id);
+        console.log('🩺 isNewPatient:', existingPatientResponse.data.appointment.isNewPatient);
+        console.log('👤 就診者:', JSON.parse(existingPatientResponse.data.appointment.patient_info).name);
+      } else {
+        console.log('❌ 非初診預約創建失敗:', existingPatientResponse.data.error);
+      }
+    } catch (error) {
+      console.log('❌ 非初診預約創建錯誤:', error.response?.data?.error || error.message);
+    }
+    
+    console.log('\n🎉 真實用戶測試完成！');
+    
+  } catch (error) {
+    console.error('❌ 測試過程中發生錯誤:', error.message);
+  }
+}
+
 // 執行測試
 if (require.main === module) {
   runTests();
+  testRealUserAppointment();
 }
 
-module.exports = { runTests }; 
+module.exports = { runTests, testRealUserAppointment }; 
