@@ -31,12 +31,17 @@ async function main() {
     console.log('[緊急] 檢查資料表結構...');
     const usersTableInfo = await getTableInfo('users');
     const scheduleTableInfo = await getTableInfo('schedule');
+    const appointmentsTableInfo = await getTableInfo('appointments');
     
-    // 2. 確保有標準測試用戶
+    // 2. 確保 appointments 表有必要的欄位
+    console.log('[緊急] 檢查 appointments 表結構...');
+    await ensureAppointmentsTableComplete(appointmentsTableInfo);
+    
+    // 3. 確保有標準測試用戶
     console.log('[緊急] 確保有標準測試用戶...');
     await ensureStandardUsersExist(usersTableInfo);
     
-    // 3. 確保有醫生用戶
+    // 4. 確保有醫生用戶
     console.log('[緊急] 確保有醫生用戶...');
     const doctor = await ensureDoctorExists(usersTableInfo);
     
@@ -45,7 +50,7 @@ async function main() {
     }
     console.log(`[緊急] 獲取到的醫生 ID: ${doctor.id}`);
     
-    // 4. 強制為2025年5月1日添加一條排班記錄
+    // 5. 強制為2025年5月1日添加一條排班記錄
     if (scheduleTableInfo.exists) {
         console.log(`[緊急] 強制為 2025-05-01 添加排班數據 (醫生ID: ${doctor.id})...`);
         await forceAddSingleScheduleEntry(scheduleTableInfo, doctor.id, '2025-05-01');
@@ -53,7 +58,7 @@ async function main() {
         console.warn('[緊急] Schedule 表不存在，跳過強制添加排班條目。');
     }
 
-    // 5. 確保有排班數據 (例如，為2025年5月)
+    // 6. 確保有排班數據 (例如，為2025年5月)
     const targetYear = 2025;
     const targetMonth = 5; // 5 代表五月
     console.log(`[緊急] 確保為 ${targetYear}年${targetMonth}月 添加排班數據 (醫生ID: ${doctor.id})...`);
@@ -435,6 +440,60 @@ async function createStandardUserIfNotExists(tableInfo, userData) {
       }
     );
   });
+}
+
+/**
+ * 確保 appointments 表結構完整
+ */
+async function ensureAppointmentsTableComplete(tableInfo) {
+  console.log('[緊急] 檢查 appointments 表結構完整性...');
+  
+  if (!tableInfo.exists) {
+    console.log('[緊急] appointments 表不存在，將由主應用創建');
+    return;
+  }
+  
+  // 檢查必要的欄位
+  const requiredFields = ['isNewPatient', 'patient_info'];
+  const missingFields = requiredFields.filter(field => !tableInfo.hasColumn(field));
+  
+  if (missingFields.length === 0) {
+    console.log('[緊急] appointments 表結構完整 ✅');
+    return;
+  }
+  
+  console.log(`[緊急] appointments 表缺少欄位: ${missingFields.join(', ')}`);
+  console.log('[緊急] 正在修復表結構...');
+  
+  for (const field of missingFields) {
+    try {
+      let sql = '';
+      if (field === 'isNewPatient') {
+        sql = 'ALTER TABLE appointments ADD COLUMN isNewPatient BOOLEAN DEFAULT FALSE';
+      } else if (field === 'patient_info') {
+        sql = 'ALTER TABLE appointments ADD COLUMN patient_info TEXT';
+      }
+      
+      if (sql) {
+        console.log(`[緊急] 添加 ${field} 欄位...`);
+        await runQuery(sql);
+        console.log(`[緊急] ✅ ${field} 欄位添加成功`);
+      }
+    } catch (error) {
+      console.error(`[緊急] ❌ 添加 ${field} 欄位失敗:`, error.message);
+    }
+  }
+  
+  // 驗證修復結果
+  console.log('[緊急] 驗證修復結果...');
+  const updatedTableInfo = await getTableInfo('appointments');
+  const stillMissing = requiredFields.filter(field => !updatedTableInfo.hasColumn(field));
+  
+  if (stillMissing.length === 0) {
+    console.log('[緊急] ✅ appointments 表結構修復完成');
+  } else {
+    console.error(`[緊急] ❌ 仍有欄位缺失: ${stillMissing.join(', ')}`);
+  }
 }
 
 // 執行主程序
