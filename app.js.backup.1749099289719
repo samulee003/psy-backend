@@ -24,7 +24,6 @@ console.log('[APP] 資料庫設定已載入');
 // 引入中間件
 console.log('[APP] 準備載入錯誤處理中間件...');
 const { notFound, errorHandler } = require('./middlewares/errorHandler');
-const { enhancedErrorHandler } = require('./middlewares/enhancedErrorHandler');
 console.log('[APP] 錯誤處理中間件已載入');
 
 // 創建 Express 應用
@@ -84,20 +83,6 @@ const corsOptions = {
 
 app.use(cors(corsOptions));
 console.log('[APP] CORS 中間件已註冊');
-
-// [ENHANCED_CORS] 緊急修復：增強CORS處理
-app.use((req, res, next) => {
-  console.log('[CORS_LOG] 請求:', {
-    method: req.method,
-    path: req.path,
-    origin: req.headers.origin,
-    userAgent: req.headers['user-agent'],
-    contentType: req.headers['content-type'],
-    timestamp: new Date().toISOString()
-  });
-  next();
-});
-
 
 // **新增：手動處理 OPTIONS 預檢請求**
 app.options('*', (req, res) => {
@@ -161,7 +146,7 @@ console.log('[APP] API 路由已成功掛載');
 // --- 錯誤處理中間件 (應在所有路由和中間件之後) ---
 console.log('[APP] 準備註冊 Not Found 和 Error Handler 中間件...');
 app.use(notFound);
-app.use(enhancedErrorHandler);
+app.use(errorHandler);
 console.log('[APP] Not Found 和 Error Handler 中間件已註冊');
 
 console.log('[APP] 準備導出 app 和 db...');
