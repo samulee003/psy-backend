@@ -11,7 +11,7 @@
       "path": "/data"
     }
   ],
-  "start": "node production-fix-appointments-table.js && node emergency-test-data.js && node -e \"console.log('[Zeabur Startup] 修復腳本已執行，準備啟動主應用...')\" && npm start",
+  "start": "node emergency-test-data.js && node -e \"console.log('[Zeabur Startup] 緊急測試資料腳本已執行，準備啟動主應用...')\" && npm start",
   "healthCheck": {
     "path": "/api/health",
     "port": 5000

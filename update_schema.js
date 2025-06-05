@@ -1,6 +1,10 @@
 /**
  * 資料庫結構更新腳本
- * 添加 is_rest_day 欄位到 schedule 表
+ * 確保所有表都有必要的欄位
+ * 包括：
+ * - schedule 表: is_rest_day, defined_slots, utc_datetime
+ * - appointments 表: utc_datetime, patient_info, isNewPatient
+ * - users 表: reset_token, reset_token_expiry
  */
 
 // 載入環境變數
@@ -12,7 +16,7 @@ const path = require('path');
 // 獲取資料庫路徑
 const dbPath = process.env.DB_PATH || path.join(__dirname, 'database.sqlite');
 
-console.log('開始執行資料庫更新腳本 - 添加 isRestDay 欄位到 schedule 表');
+console.log('開始執行資料庫更新腳本 - 確保所有表都有必要的欄位');
 console.log('資料庫路徑:', dbPath);
 
 // 連接到資料庫
@@ -144,6 +148,20 @@ async function updateDatabaseSchema() {
     if (!hasUtcDateTime) {
       console.log('正在添加 utc_datetime 欄位到 appointments 表...');
       await addColumn('appointments', 'utc_datetime', 'TEXT');
+    }
+    
+    // 檢查 patient_info 欄位是否存在
+    const hasPatientInfo = tableInfo.some(column => column.name === 'patient_info');
+    if (!hasPatientInfo) {
+      console.log('正在添加 patient_info 欄位到 appointments 表...');
+      await addColumn('appointments', 'patient_info', 'TEXT');
+    }
+    
+    // 檢查 isNewPatient 欄位是否存在
+    const hasIsNewPatient = tableInfo.some(column => column.name === 'isNewPatient');
+    if (!hasIsNewPatient) {
+      console.log('正在添加 isNewPatient 欄位到 appointments 表...');
+      await addColumn('appointments', 'isNewPatient', 'BOOLEAN DEFAULT FALSE');
     }
   } else {
     console.log('appointments 表不存在，無需添加欄位');
