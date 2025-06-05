@@ -128,6 +128,8 @@ const initializeDatabase = (db) => {
               doctor_id INTEGER,
               status TEXT DEFAULT 'confirmed',
               notes TEXT,
+              patient_info TEXT,
+              isNewPatient BOOLEAN DEFAULT FALSE,
               created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
               updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
               FOREIGN KEY (patient_id) REFERENCES users(id),
