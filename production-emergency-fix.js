@@ -4,6 +4,8 @@
  */
 
 const axios = require('axios');
+const sqlite3 = require('sqlite3').verbose();
+const path = require('path');
 
 const PRODUCTION_URL = 'https://psy-backend.zeabur.app';
 
@@ -12,6 +14,139 @@ const TEST_USER = {
   email: 'samu003@gmail.com',
   password: 'sam003'
 };
+
+// 生產環境資料庫路徑（根據實際部署調整）
+const dbPath = process.env.DATABASE_URL || process.env.DB_PATH || 'database.sqlite';
+
+console.log('🚑 生產環境緊急修復：isNewPatient 欄位');
+console.log('📍 資料庫路徑:', dbPath);
+console.log('⏰ 修復時間:', new Date().toISOString());
+
+const db = new sqlite3.Database(dbPath, (err) => {
+  if (err) {
+    console.error('❌ 資料庫連接失敗:', err.message);
+    console.log('🔍 請檢查資料庫路徑是否正確');
+    process.exit(1);
+  }
+  console.log('✅ 成功連接到生產環境資料庫');
+});
+
+// 檢查並修復表結構
+console.log('\n📋 檢查 appointments 表結構...');
+
+db.all("PRAGMA table_info(appointments)", (err, columns) => {
+  if (err) {
+    console.error('❌ 無法檢查表結構:', err.message);
+    process.exit(1);
+  }
+
+  console.log('📊 當前欄位列表:');
+  const existingColumns = columns.map(col => col.name);
+  existingColumns.forEach(col => console.log(`  - ${col}`));
+
+  // 檢查缺少的欄位
+  const requiredColumns = ['isNewPatient', 'patient_info'];
+  const missingColumns = requiredColumns.filter(col => !existingColumns.includes(col));
+
+  if (missingColumns.length === 0) {
+    console.log('\n✅ 表結構正常，所有必要欄位都存在');
+    console.log('❓ 如果仍有錯誤，可能是應用服務需要重啟');
+    db.close();
+    return;
+  }
+
+  console.log(`\n🚨 缺少關鍵欄位: ${missingColumns.join(', ')}`);
+  console.log('🔧 開始修復...');
+
+  let fixed = 0;
+  const total = missingColumns.length;
+
+  // 修復 isNewPatient 欄位
+  if (missingColumns.includes('isNewPatient')) {
+    console.log('\n1️⃣ 添加 isNewPatient 欄位...');
+    db.run('ALTER TABLE appointments ADD COLUMN isNewPatient BOOLEAN DEFAULT FALSE', (err) => {
+      if (err) {
+        console.error('❌ 添加 isNewPatient 失敗:', err.message);
+      } else {
+        console.log('✅ isNewPatient 欄位添加成功');
+      }
+      
+      fixed++;
+      if (fixed === total) {
+        verifyFix();
+      }
+    });
+  }
+
+  // 修復 patient_info 欄位
+  if (missingColumns.includes('patient_info')) {
+    console.log('\n2️⃣ 添加 patient_info 欄位...');
+    db.run('ALTER TABLE appointments ADD COLUMN patient_info TEXT', (err) => {
+      if (err) {
+        console.error('❌ 添加 patient_info 失敗:', err.message);
+      } else {
+        console.log('✅ patient_info 欄位添加成功');
+      }
+      
+      fixed++;
+      if (fixed === total) {
+        verifyFix();
+      }
+    });
+  }
+
+  // 驗證修復結果
+  function verifyFix() {
+    console.log('\n🔍 驗證修復結果...');
+    
+    db.all("PRAGMA table_info(appointments)", (err, newColumns) => {
+      if (err) {
+        console.error('❌ 驗證失敗:', err.message);
+        db.close();
+        return;
+      }
+
+      const newColumnNames = newColumns.map(col => col.name);
+      const stillMissing = requiredColumns.filter(col => !newColumnNames.includes(col));
+
+      if (stillMissing.length === 0) {
+        console.log('\n🎉 修復成功！');
+        console.log('📋 更新後的表結構:');
+        newColumns.forEach(col => {
+          console.log(`  - ${col.name} (${col.type})`);
+        });
+
+        // 測試新結構
+        console.log('\n🧪 測試修復效果...');
+        const testSQL = `
+          INSERT INTO appointments (
+            doctor_id, patient_id, date, time, notes, status, patient_info, isNewPatient, created_at
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
+        `;
+        
+        db.run(testSQL, [4, 3, '2025-12-31', '23:59', '修復測試', 'confirmed', '{"name":"測試"}', true], function(err) {
+          if (err) {
+            console.error('❌ 測試失敗:', err.message);
+            console.log('⚠️ 結構已添加但可能需要重啟應用服務');
+          } else {
+            console.log('✅ 測試成功！新結構正常工作');
+            
+            // 清理測試記錄
+            db.run('DELETE FROM appointments WHERE id = ?', [this.lastID], () => {
+              console.log('🧹 測試記錄已清理');
+              console.log('\n🎊 生產環境修復完成！');
+              console.log('📝 請重啟應用服務以確保修改生效');
+              db.close();
+            });
+          }
+        });
+      } else {
+        console.log(`\n❌ 修復不完整，仍缺少: ${stillMissing.join(', ')}`);
+        db.close();
+      }
+    });
+  }
+});
 
 async function fixProductionEnvironment() {
   console.log('🚑 生產環境緊急修復...\n');

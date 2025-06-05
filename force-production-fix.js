@@ -4,12 +4,27 @@
  */
 
 const axios = require('axios');
+const sqlite3 = require('sqlite3').verbose();
+const path = require('path');
 
 const PRODUCTION_URL = 'https://psy-backend.zeabur.app';
 const TEST_USER = {
   email: 'samu003@gmail.com',
   password: 'sam003'
 };
+
+const dbPath = path.join(__dirname, 'database.sqlite');
+
+console.log('🚑 強制修復生產環境資料庫結構');
+console.log('📍 資料庫:', dbPath);
+
+const db = new sqlite3.Database(dbPath, (err) => {
+  if (err) {
+    console.error('❌ 連接失敗:', err.message);
+    process.exit(1);
+  }
+  console.log('✅ 資料庫連接成功');
+});
 
 async function forceProductionFix() {
   console.log('🔧 強制修復生產環境...\n');
@@ -141,6 +156,72 @@ function showManualSolution() {
   console.log('- ✅ 本地環境無痕模式正常');
   console.log('- 🔧 僅需等待生產環境部署完成');
 }
+
+// 直接執行修復
+console.log('\n🔧 強制添加缺少的欄位...');
+
+// 1. 添加 isNewPatient
+db.run('ALTER TABLE appointments ADD COLUMN isNewPatient BOOLEAN DEFAULT FALSE', (err) => {
+  if (err && !err.message.includes('duplicate column name')) {
+    console.error('❌ 添加 isNewPatient 失敗:', err.message);
+  } else {
+    console.log('✅ isNewPatient 欄位處理完成');
+  }
+  
+  // 2. 添加 patient_info
+  db.run('ALTER TABLE appointments ADD COLUMN patient_info TEXT', (err) => {
+    if (err && !err.message.includes('duplicate column name')) {
+      console.error('❌ 添加 patient_info 失敗:', err.message);
+    } else {
+      console.log('✅ patient_info 欄位處理完成');
+    }
+    
+    // 3. 驗證結果
+    console.log('\n🔍 驗證修復結果...');
+    db.all("PRAGMA table_info(appointments)", (err, columns) => {
+      if (err) {
+        console.error('❌ 驗證失敗:', err.message);
+        db.close();
+        return;
+      }
+      
+      const columnNames = columns.map(col => col.name);
+      const hasIsNewPatient = columnNames.includes('isNewPatient');
+      const hasPatientInfo = columnNames.includes('patient_info');
+      
+      console.log('📋 當前欄位檢查:');
+      console.log(`  - isNewPatient: ${hasIsNewPatient ? '✅' : '❌'}`);
+      console.log(`  - patient_info: ${hasPatientInfo ? '✅' : '❌'}`);
+      
+      if (hasIsNewPatient && hasPatientInfo) {
+        console.log('\n🎉 修復成功！測試預約創建...');
+        
+        // 測試預約創建
+        db.run(`INSERT INTO appointments (
+          doctor_id, patient_id, date, time, notes, status, patient_info, isNewPatient, created_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))`,
+        [4, 3, '2025-12-31', '23:59', '測試', 'confirmed', '{"name":"測試"}', true],
+        function(err) {
+          if (err) {
+            console.error('❌ 預約測試失敗:', err.message);
+          } else {
+            console.log('✅ 預約測試成功，ID:', this.lastID);
+            
+            // 清理測試記錄
+            db.run('DELETE FROM appointments WHERE id = ?', [this.lastID], () => {
+              console.log('🧹 測試記錄已清理');
+              console.log('\n🎊 修復完成！預約功能應該可以正常使用了');
+              db.close();
+            });
+          }
+        });
+      } else {
+        console.log('\n❌ 修復失敗，請手動檢查');
+        db.close();
+      }
+    });
+  });
+});
 
 // 執行修復
 if (require.main === module) {

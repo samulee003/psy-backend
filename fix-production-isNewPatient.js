@@ -1,127 +1,138 @@
 #!/usr/bin/env node
 
 /**
- * 修復生產環境 isNewPatient 欄位問題
- * 確保線上資料庫與本地資料庫結構一致
+ * 生產環境 isNewPatient 欄位緊急修復
+ * 解決：SQLITE_ERROR: table appointments has no column named isNewPatient
  */
 
 const sqlite3 = require('sqlite3').verbose();
 const path = require('path');
 
-const DB_PATH = path.join(__dirname, 'database.sqlite');
+// 使用環境變數指定的資料庫路徑，或預設路徑
+const dbPath = process.env.DATABASE_URL || process.env.DB_PATH || path.join(__dirname, 'database.sqlite');
 
-async function fixProductionDatabase() {
-  return new Promise((resolve, reject) => {
-    console.log('🔧 開始修復生產環境資料庫 isNewPatient 欄位...\n');
+console.log('🚑 生產環境緊急修復：添加 isNewPatient 欄位');
+console.log('📍 資料庫路徑:', dbPath);
+
+const db = new sqlite3.Database(dbPath, (err) => {
+  if (err) {
+    console.error('❌ 無法連接資料庫:', err.message);
+    process.exit(1);
+  }
+  console.log('✅ 成功連接到生產環境資料庫');
+});
+
+// 檢查現有表結構
+console.log('\n🔍 檢查當前 appointments 表結構...');
+db.all("PRAGMA table_info(appointments)", (err, columns) => {
+  if (err) {
+    console.error('❌ 檢查表結構失敗:', err.message);
+    process.exit(1);
+  }
+
+  console.log('📋 當前欄位:');
+  const existingColumns = columns.map(col => col.name);
+  columns.forEach(col => {
+    console.log(`  - ${col.name} (${col.type})`);
+  });
+
+  // 檢查缺少的欄位
+  const missingColumns = [];
+  if (!existingColumns.includes('isNewPatient')) {
+    missingColumns.push('isNewPatient');
+  }
+  if (!existingColumns.includes('patient_info')) {
+    missingColumns.push('patient_info');
+  }
+
+  if (missingColumns.length === 0) {
+    console.log('\n✅ 所有必要欄位都已存在，無需修復');
+    db.close();
+    return;
+  }
+
+  console.log(`\n🚨 發現缺少欄位: ${missingColumns.join(', ')}`);
+  
+  // 逐一添加缺少的欄位
+  let completed = 0;
+  const total = missingColumns.length;
+
+  missingColumns.forEach((column, index) => {
+    let sql = '';
     
-    const db = new sqlite3.Database(DB_PATH, (err) => {
+    if (column === 'isNewPatient') {
+      sql = 'ALTER TABLE appointments ADD COLUMN isNewPatient BOOLEAN DEFAULT FALSE';
+    } else if (column === 'patient_info') {
+      sql = 'ALTER TABLE appointments ADD COLUMN patient_info TEXT';
+    }
+
+    console.log(`\n🔧 [${index + 1}/${total}] 執行: ${sql}`);
+    
+    db.run(sql, (err) => {
       if (err) {
-        console.error('❌ 資料庫連接失敗:', err.message);
-        reject(err);
-        return;
-      }
-      console.log('✅ 成功連接到資料庫');
-    });
-
-    // 1. 檢查當前表結構
-    console.log('\n1️⃣ 檢查當前 appointments 表結構...');
-    db.all("PRAGMA table_info(appointments)", [], (err, columns) => {
-      if (err) {
-        console.error('❌ 無法獲取表結構:', err.message);
-        db.close();
-        reject(err);
-        return;
-      }
-
-      console.log('📋 當前表欄位:');
-      columns.forEach(col => {
-        console.log(`   - ${col.name} (${col.type})`);
-      });
-
-      // 2. 檢查 isNewPatient 欄位是否存在
-      const hasIsNewPatient = columns.some(col => col.name === 'isNewPatient');
-      
-      if (hasIsNewPatient) {
-        console.log('\n✅ isNewPatient 欄位已存在');
-        
-        // 3. 檢查現有預約記錄中 isNewPatient 的值
-        db.all("SELECT id, date, time, patient_info, isNewPatient FROM appointments LIMIT 5", [], (err, appointments) => {
-          if (err) {
-            console.error('❌ 查詢預約記錄失敗:', err.message);
-          } else {
-            console.log('\n📊 現有預約記錄樣本:');
-            appointments.forEach(apt => {
-              console.log(`   預約 ${apt.id}: ${apt.date} ${apt.time}, isNewPatient: ${apt.isNewPatient}`);
-            });
-          }
-          
-          console.log('\n✅ 生產環境資料庫結構正確，無需修復');
-          db.close();
-          resolve('正常');
-        });
+        console.error(`❌ 添加 ${column} 失敗:`, err.message);
       } else {
-        console.log('\n⚠️ isNewPatient 欄位不存在，需要添加');
+        console.log(`✅ 成功添加 ${column} 欄位`);
+      }
+      
+      completed++;
+      
+      // 當所有欄位都處理完成時
+      if (completed === total) {
+        console.log(`\n📊 修復完成: ${completed}/${total} 個欄位`);
         
-        // 4. 添加 isNewPatient 欄位
-        const addColumnSQL = `
-          ALTER TABLE appointments 
-          ADD COLUMN isNewPatient BOOLEAN DEFAULT FALSE
-        `;
-        
-        console.log('\n2️⃣ 添加 isNewPatient 欄位...');
-        db.run(addColumnSQL, [], function(err) {
+        // 驗證修復結果
+        console.log('\n🔍 驗證修復結果...');
+        db.all("PRAGMA table_info(appointments)", (err, newColumns) => {
           if (err) {
-            console.error('❌ 添加欄位失敗:', err.message);
+            console.error('❌ 驗證失敗:', err.message);
             db.close();
-            reject(err);
             return;
           }
-          
-          console.log('✅ 成功添加 isNewPatient 欄位');
-          
-          // 5. 驗證欄位添加成功
-          console.log('\n3️⃣ 驗證欄位添加...');
-          db.all("PRAGMA table_info(appointments)", [], (err, newColumns) => {
-            if (err) {
-              console.error('❌ 驗證失敗:', err.message);
-              db.close();
-              reject(err);
-              return;
-            }
-            
-            const nowHasIsNewPatient = newColumns.some(col => col.name === 'isNewPatient');
-            if (nowHasIsNewPatient) {
-              console.log('✅ 欄位添加驗證成功');
-              
-              // 6. 更新現有記錄的 isNewPatient 值（預設為 false）
-              console.log('\n4️⃣ 初始化現有記錄的 isNewPatient 值...');
-              db.run("UPDATE appointments SET isNewPatient = FALSE WHERE isNewPatient IS NULL", [], function(err) {
-                if (err) {
-                  console.error('❌ 初始化記錄失敗:', err.message);
-                } else {
-                  console.log(`✅ 初始化 ${this.changes} 筆記錄的 isNewPatient 值`);
-                }
-                
-                console.log('\n🎉 生產環境資料庫修復完成！');
-                console.log('\n📋 修復後的表結構:');
-                newColumns.forEach(col => {
-                  console.log(`   - ${col.name} (${col.type})`);
-                });
-                
-                db.close();
-                resolve('已修復');
-              });
-            } else {
-              console.error('❌ 欄位添加失敗');
-              db.close();
-              reject(new Error('欄位添加失敗'));
-            }
+
+          console.log('\n📋 修復後的表結構:');
+          newColumns.forEach(col => {
+            console.log(`  - ${col.name} (${col.type}) ${col.notnull ? 'NOT NULL' : 'NULL'} ${col.dflt_value ? `DEFAULT ${col.dflt_value}` : ''}`);
           });
+
+          // 最終檢查
+          const finalColumns = newColumns.map(col => col.name);
+          const stillMissing = ['isNewPatient', 'patient_info'].filter(col => !finalColumns.includes(col));
+
+          if (stillMissing.length === 0) {
+            console.log('\n🎉 修復成功！所有必要欄位都已添加');
+            
+            // 測試新結構
+            console.log('\n🧪 測試新表結構...');
+            const testSQL = `
+              INSERT INTO appointments (
+                doctor_id, patient_id, date, time, notes, status, patient_info, isNewPatient, created_at
+              ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
+            `;
+            
+            db.run(testSQL, [4, 3, '2025-08-15', '10:00', '測試', 'confirmed', '{"name":"測試"}', true], function(err) {
+              if (err) {
+                console.error('❌ 測試失敗:', err.message);
+              } else {
+                console.log('✅ 測試成功！新結構正常工作，測試記錄ID:', this.lastID);
+                
+                // 清理測試記錄
+                db.run('DELETE FROM appointments WHERE id = ?', [this.lastID], () => {
+                  console.log('🧹 測試記錄已清理');
+                  console.log('\n🎊 生產環境修復完成！現在可以正常創建預約了');
+                  db.close();
+                });
+              }
+            });
+          } else {
+            console.log(`\n❌ 仍有欄位缺少: ${stillMissing.join(', ')}`);
+            db.close();
+          }
         });
       }
     });
   });
-}
+});
 
 // 執行修復
 if (require.main === module) {
