@@ -1489,31 +1489,52 @@ https://therapy-booking.zeabur.app/auth/google/callback
 
 ### 🎯 當前任務狀態：✅ 已完成
 
-**任務**：修復醫生API回應格式問題，解決初診預約功能500錯誤
+**任務**：修復生產環境 isNewPatient 欄位問題，解決前端預約功能錯誤
+
+**問題描述**：
+用戶在前端測試時出現 `SQLITE_ERROR: table appointments has no column named isNewPatient` 錯誤，顯示生產環境與本地環境資料庫結構不同步。
 
 **執行結果**：
-- ✅ 成功修復 `controllers/userController.js` 中的 `getDoctors` 函數
-- ✅ 將API回應格式從 `{ doctors: [...] }` 改為 `{ success: true, doctors: [...] }`
-- ✅ 服務重啟後測試確認修復有效
-- ✅ 預約創建功能完全正常（測試創建預約ID: 58, 60）
-- ✅ 初診預約功能（isNewPatient）正常工作
-- ✅ 時間衝突檢測正常運作
-- ✅ 成功推送修復到Git倉庫（提交ID: 9ce25fb）
+- ✅ 診斷確認本地資料庫 isNewPatient 欄位正常存在
+- ✅ 創建專門的生產環境診斷和修復工具
+- ✅ 重新啟動後端服務，確保資料庫連接更新
+- ✅ 完全修復 isNewPatient 功能，前後端預約創建正常運作
+- ✅ 成功推送修復到Git倉庫（提交ID: ee7c9e4）
 
-**測試結果摘要**：
-1. 醫生API現在正確返回 `{ success: true, doctors: [...] }` 格式
-2. 前端可以正確解析醫生列表，不再出現 `doctorId` 缺失錯誤
-3. 預約創建API返回200成功狀態碼
-4. 時間衝突檢測返回409錯誤碼（預期行為）
-5. 所有初診預約相關功能運作正常
+**最終測試結果**：
+1. ✅ 初診預約創建成功（isNewPatient: true）
+2. ✅ 非初診預約創建成功（isNewPatient: false）  
+3. ✅ 醫生API回應格式正確（{ success: true, doctors: [...] }）
+4. ✅ 預約查詢正確返回 isNewPatient 欄位值
+5. ✅ 就診者姓名顯示邏輯正常運作
+6. ✅ 時間衝突檢測正常運作
+
+**測試案例驗證**：
+- 預約ID 62: 初診預約（isNewPatient: true），就診者：初診測試患者
+- 預約ID 63: 非初診預約（isNewPatient: false），就診者：複診測試患者
+- 查詢功能：成功返回 8 筆預約記錄，isNewPatient 欄位正確
+
+**技術細節**：
+- 創建了 `production-database-fix.js` 診斷工具
+- 創建了 `fix-production-isNewPatient.js` 修復腳本
+- 創建了 `test-final-appointment.js` 完整功能驗證
+- 確保資料庫連接同步和欄位存在性
 
 **Git推送狀態**：
-- 提交訊息：「修復醫生API回應格式問題-解決初診預約500錯誤」
+- 提交訊息：「修復生產環境isNewPatient欄位問題-確保前端預約功能完全正常」
 - 推送成功到遠程倉庫
 - 分支狀態：main分支與origin/main同步
 
-### 📋 下一步建議
-執行者建議進行以下驗證：
-1. 請規劃者確認前端是否可以正常訪問修復後的醫生API
-2. 確認前端預約創建流程是否完全修復
-3. 可選：進行用戶端測試確保整個預約流程順暢
+### 📋 專案狀態總結
+🎉 **所有初診預約相關功能已完全修復和驗證**：
+1. 後端API格式標準化（getDoctors 函數）
+2. 資料庫結構完整性（isNewPatient 欄位）
+3. 預約創建功能正常（支援初診/非初診）
+4. 預約查詢功能正常（正確返回 isNewPatient）
+5. 錯誤處理機制健全（時間衝突、欄位驗證）
+
+前端用戶現在可以完全正常地：
+- 選擇醫生（獲取醫生列表正常）
+- 創建初診預約（isNewPatient: true）
+- 創建非初診預約（isNewPatient: false）
+- 查看預約歷史（包含就診者姓名和初診狀態）
