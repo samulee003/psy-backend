@@ -100,12 +100,15 @@ const validateAppointment = (appointmentData) => {
   
   // 驗證病人信息 (如果是新病人)
   if (appointmentData.isNewPatient && appointmentData.patientInfo) {
-    // 檢查必填欄位
-    const patientRequiredFields = ['phone'];
-    const patientCheck = validateRequired(appointmentData.patientInfo, patientRequiredFields);
-    if (!patientCheck.isValid) {
-      return patientCheck;
-    }
+    // 檢查必填欄位 - 暫時移除 phone 的必填要求
+    // 2025-01-27: 修復 - phone 改為可選欄位，避免阻擋預約創建
+    // const patientRequiredFields = ['phone'];
+    // const patientCheck = validateRequired(appointmentData.patientInfo, patientRequiredFields);
+    // if (!patientCheck.isValid) {
+    //   return patientCheck;
+    // }
+    
+    // 現在不強制要求任何欄位，但仍會驗證格式（如果有提供）
     
     // 驗證電話號碼
     if (appointmentData.patientInfo.phone && !isValidPhone(appointmentData.patientInfo.phone)) {
