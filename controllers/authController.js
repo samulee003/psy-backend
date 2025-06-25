@@ -492,11 +492,79 @@ const resetPassword = (db) => async (req, res) => {
   }
 };
 
+// **新增：簡化密碼更新功能 (配合前端EmailJS)**
+const updatePassword = (db) => async (req, res) => {
+  try {
+    const { email, newPassword } = req.body;
+
+    console.log('[Auth] 處理簡化密碼更新請求:', { email });
+
+    if (!email || !newPassword) {
+      return res.status(400).json({ 
+        success: false, 
+        error: '請提供電子郵件和新密碼' 
+      });
+    }
+
+    if (newPassword.length < 6) {
+      return res.status(400).json({ 
+        success: false, 
+        error: '新密碼長度必須至少為 6 個字符' 
+      });
+    }
+
+    // 查詢用戶是否存在
+    db.get('SELECT id, name, email FROM users WHERE email = ? OR username = ?', [email, email], async (err, user) => {
+      if (err) {
+        console.error('[Auth] 查詢用戶時發生錯誤:', err.message);
+        return res.status(500).json({ success: false, error: '伺服器錯誤' });
+      }
+
+      if (!user) {
+        return res.status(404).json({ 
+          success: false, 
+          error: '找不到此電子郵件對應的用戶' 
+        });
+      }
+
+      try {
+        // 加密新密碼
+        const saltRounds = 10;
+        const hashedPassword = await bcrypt.hash(newPassword, saltRounds);
+
+        // 更新密碼
+        const updateQuery = `UPDATE users SET password = ? WHERE id = ?`;
+
+        db.run(updateQuery, [hashedPassword, user.id], function(err) {
+          if (err) {
+            console.error('[Auth] 更新密碼時發生錯誤:', err.message);
+            return res.status(500).json({ success: false, error: '更新密碼時發生錯誤' });
+          }
+
+          console.log('[Auth] 密碼更新成功:', { userId: user.id, email: user.email });
+
+          res.json({
+            success: true,
+            message: '密碼更新成功，請使用新密碼登入'
+          });
+        });
+      } catch (hashError) {
+        console.error('[Auth] 密碼加密錯誤:', hashError.message);
+        res.status(500).json({ success: false, error: '處理新密碼時發生錯誤' });
+      }
+    });
+  } catch (error) {
+    console.error('[Auth] 密碼更新功能發生錯誤:', error.message);
+    res.status(500).json({ success: false, error: '服務暫時不可用' });
+  }
+};
+
 module.exports = (db) => ({
   register: register(db),
   login: login(db),
   logout,
   getCurrentUser: getCurrentUser(db),
   forgotPassword: forgotPassword(db),
-  resetPassword: resetPassword(db)
+  resetPassword: resetPassword(db),
+  updatePassword: updatePassword(db)  // 新增簡化的密碼更新功能
 }); 

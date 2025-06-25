@@ -32,6 +32,9 @@ module.exports = (db) => {
   // **新增：重置密碼功能**
   router.post('/reset-password', authController.resetPassword);
 
+  // **新增：簡化密碼更新功能 (配合前端EmailJS)**
+  router.put('/update-password', authController.updatePassword);
+
   // Google OAuth 2.0 認證路由
   // Google 登入
   router.post('/google/login', googleAuthController.googleLogin);
