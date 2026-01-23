@@ -14,6 +14,7 @@ module.exports = (db) => {
   const scheduleRoutes = require('./scheduleRoutes')(db);
   const settingsRoutes = require('./settingsRoutes')(db);
   const adminRoutes = require('./adminRoutes')(db);
+  const calendarRoutes = require('./calendarRoutes')(db);
 
   // 掛載路由
   router.use('/api/auth', authRoutes);
@@ -22,6 +23,8 @@ module.exports = (db) => {
   router.use('/api/schedules', scheduleRoutes);
   router.use('/api/settings', settingsRoutes);
   router.use('/api/admin', adminRoutes);
+  router.use('/api/calendar', calendarRoutes);
+
 
   // 直接添加登入與註冊路由，以匹配前端的 API 調用
   const authController = require('../controllers/authController')(db);
