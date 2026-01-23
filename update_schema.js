@@ -93,7 +93,33 @@ async function updateDatabaseSchema() {
     } else {
       console.log('reset_token_expiry 欄位已存在');
     }
+
+    // 檢查 calendar_token 欄位是否存在
+    const hasCalendarToken = usersTableInfo.some(column => column.name === 'calendar_token');
+    if (!hasCalendarToken) {
+      console.log('正在添加 calendar_token 欄位到 users 表...');
+      await addColumn('users', 'calendar_token', 'TEXT');
+      
+      // 為現有醫生生成 Token
+      console.log('正在為現有醫生生成行事曆 Token...');
+      await new Promise((resolve, reject) => {
+        const crypto = require('crypto');
+        db.all("SELECT id FROM users WHERE role = 'doctor'", [], (err, rows) => {
+          if (err) return reject(err);
+          const updates = rows.map(row => {
+            const token = crypto.randomBytes(16).toString('hex');
+            return new Promise((res, rej) => {
+              db.run("UPDATE users SET calendar_token = ? WHERE id = ?", [token, row.id], (e) => e ? rej(e) : res());
+            });
+          });
+          Promise.all(updates).then(resolve).catch(reject);
+        });
+      });
+    } else {
+      console.log('calendar_token 欄位已存在');
+    }
   } else {
+
     console.log('users 表不存在，無需添加密碼重置欄位');
   }
   
