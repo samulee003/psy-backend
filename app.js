@@ -158,6 +158,16 @@ console.log('[APP] 準備掛載 API 路由...');
 app.use(routes);
 console.log('[APP] API 路由已成功掛載');
 
+// 處理根路徑請求 (健康檢查用)
+app.get('/', (req, res) => {
+  res.status(200).send('Server is running');
+});
+
+// 處理 favicon.ico 請求 (避免瀏覽器 404 錯誤)
+app.get('/favicon.ico', (req, res) => {
+  res.status(204).end();
+});
+
 // --- 錯誤處理中間件 (應在所有路由和中間件之後) ---
 console.log('[APP] 準備註冊 Not Found 和 Error Handler 中間件...');
 app.use(notFound);
