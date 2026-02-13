@@ -1,6 +1,7 @@
 
 const ics = require('ics');
 const moment = require('moment-timezone');
+const { DEFAULT_TIMEZONE } = require('../utils/timezone');
 
 /**
  * 生成醫生的行事曆 ICS 內容
@@ -20,16 +21,22 @@ const getCalendarFeed = (db) => (req, res) => {
       return res.status(404).send('Invalid calendar token');
     }
 
-    // 2. 獲取該醫生的預約列表
+    // 2. 獲取該醫生的預約列表 (限制時間範圍以提高性能)
+    const tz = DEFAULT_TIMEZONE || 'Asia/Hong_Kong';
+    const now = moment().tz(tz);
+    const startRange = now.clone().subtract(1, 'month').format('YYYY-MM-DD');
+    const endRange = now.clone().add(6, 'months').format('YYYY-MM-DD');
+
     const appointmentsQuery = `
       SELECT a.*, p.name as patient_name, a.patient_info
       FROM appointments a
       JOIN users p ON a.patient_id = p.id
       WHERE a.doctor_id = ? AND a.status = 'confirmed'
+      AND a.date >= ? AND a.date <= ?
       ORDER BY a.date DESC, a.time ASC
     `;
 
-    db.all(appointmentsQuery, [doctor.id], (err, appointments) => {
+    db.all(appointmentsQuery, [doctor.id, startRange, endRange], (err, appointments) => {
       if (err) {
         console.error('[Calendar] Error fetching appointments:', err);
         return res.status(500).send('Internal server error');
@@ -40,7 +47,7 @@ const getCalendarFeed = (db) => (req, res) => {
         // 解析日期和時間
         // app.date 格式通常是 'YYYY-MM-DD'
         // app.time 格式通常是 'HH:mm'
-        const startDateTime = moment.tz(`${app.date} ${app.time}`, 'YYYY-MM-DD HH:mm', 'Asia/Hong_Kong').utc();
+        const startDateTime = moment.tz(`${app.date} ${app.time}`, 'YYYY-MM-DD HH:mm', tz).utc();
         
         // 處理就診者姓名
         let displayPatientName = app.patient_name;
