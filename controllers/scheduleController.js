@@ -7,7 +7,10 @@ const dateUtils = require('../utils/dateUtils');
 // 創建或更新醫生排班
 const createOrUpdateSchedule = (db) => (req, res) => {
   try {
-    const { doctorId, date, startTime, endTime, slotDuration = 30, isRestDay = false, definedSlots } = req.body;
+    let { doctorId, date, startTime, endTime, slotDuration = 30, isRestDay = false, definedSlots } = req.body;
+
+    // 確保 slotDuration 是數字
+    slotDuration = Number(slotDuration);
 
     // 驗證必填欄位
     if (!doctorId || !date) {
@@ -24,8 +27,16 @@ const createOrUpdateSchedule = (db) => (req, res) => {
       return res.status(400).json({ error: '不能為過去的日期創建或更新排班' });
     }
 
+    // 驗證時間格式 (如果提供)
+    if (startTime && !dateUtils.isValidTimeFormat(startTime)) {
+      return res.status(400).json({ error: '開始時間格式應為 HH:MM' });
+    }
+    if (endTime && !dateUtils.isValidTimeFormat(endTime)) {
+      return res.status(400).json({ error: '結束時間格式應為 HH:MM' });
+    }
+
     // 如果 definedSlots 存在且是有效陣列，則 isRestDay 必須為 false
-    // 並且 startTime, endTime 應該由 definedSlots 決定或驗證，這裡暫時簡化，假設前端會傳遞合理的 startTime/endTime
+    // 並且 startTime, endTime 應該由 definedSlots 決定或驗證
     let actualIsRestDay = isRestDay;
     let definedSlotsJSON = null;
 
@@ -63,33 +74,34 @@ const createOrUpdateSchedule = (db) => (req, res) => {
       
       definedSlotsJSON = JSON.stringify(definedSlots);
       
-      // 從 definedSlots 中計算出 startTime 和 endTime
+      // 從 definedSlots 中計算或驗證 startTime 和 endTime
       const firstSlot = definedSlots[0];
       const lastSlot = definedSlots[definedSlots.length - 1];
+      const calculatedSlotEndMinutes = dateUtils.timeToMinutes(lastSlot) + slotDuration;
+      const calculatedEndTime = dateUtils.minutesToTime(calculatedSlotEndMinutes);
       
-      // 如果沒有提供 startTime 或 endTime，則從 definedSlots 中計算
+      // 如果沒有提供 startTime，則從 definedSlots 的第一個時段衍生
       if (!startTime) {
         startTime = firstSlot;
+      } else {
+        // 如果提供了 startTime，驗證它是否不晚於第一個時段
+        if (dateUtils.timeToMinutes(startTime) > dateUtils.timeToMinutes(firstSlot)) {
+          return res.status(400).json({
+            error: `提供的開始時間 (${startTime}) 不能晚於精確時段中的第一個時段 (${firstSlot})`
+          });
+        }
       }
       
+      // 如果沒有提供 endTime，則從 definedSlots 的最後一個時段衍生
       if (!endTime) {
-        // 最後一個時段的結束時間是最後一個時段的開始時間加上時段持續時間
-        const lastSlotMinutes = dateUtils.timeToMinutes(lastSlot);
-        endTime = dateUtils.minutesToTime(lastSlotMinutes + slotDuration);
-      }
-      
-      // 檢查計算出的 startTime 和 endTime 是否與提供的 definedSlots 一致
-      if (dateUtils.timeToMinutes(startTime) > dateUtils.timeToMinutes(firstSlot)) {
-        return res.status(400).json({ 
-          error: `startTime (${startTime}) 不能晚於 definedSlots 中的第一個時段 (${firstSlot})` 
-        });
-      }
-      
-      const lastSlotEndMinutes = dateUtils.timeToMinutes(lastSlot) + slotDuration;
-      if (dateUtils.timeToMinutes(endTime) < lastSlotEndMinutes) {
-        return res.status(400).json({ 
-          error: `endTime (${endTime}) 不能早於 definedSlots 中的最後一個時段結束時間 (${dateUtils.minutesToTime(lastSlotEndMinutes)})` 
-        });
+        endTime = calculatedEndTime;
+      } else {
+        // 如果提供了 endTime，驗證它是否不早於最後一個時段的結束時間
+        if (dateUtils.timeToMinutes(endTime) < calculatedSlotEndMinutes) {
+          return res.status(400).json({
+            error: `提供的結束時間 (${endTime}) 不能早於精確時段中的最後一個時段結束時間 (${calculatedEndTime})`
+          });
+        }
       }
     } else if (definedSlots && (!Array.isArray(definedSlots) || definedSlots.length === 0)) {
         // 如果傳了 definedSlots 但它是無效的 (例如空陣列或非陣列)，視為錯誤
@@ -151,13 +163,6 @@ const createOrUpdateSchedule = (db) => (req, res) => {
           is_rest_day: actualIsRestDay ? 1 : 0,
           defined_slots: definedSlotsJSON // 新增
         };
-
-        // 檢查 existingSchedule.defined_slots 是否與新的 definedSlotsJSON 不同
-        let slotsChanged = false;
-        if (definedSlotsJSON) {
-            slotsChanged = existingSchedule?.defined_slots !== definedSlotsJSON;
-        }
-
 
         if (existingSchedule) {
           // 更新現有排班
@@ -731,7 +736,7 @@ const getScheduleForMonthAndDoctor = (db) => (req, res, next) => {
               WHERE doctor_id = ? AND date = ? AND status != 'cancelled'
             `;
             
-            return new Promise((resolve, reject) => {
+            return new Promise((resolve) => {
               db.all(bookedSlotsQuery, [schedule.doctor_id, schedule.date], (err, bookedAppointments) => {
                 if (err) {
                   console.error(`[ERROR] 查詢醫生 ${schedule.doctor_id} 在 ${schedule.date} 的已預約時段失敗:`, err.message);
