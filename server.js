@@ -20,7 +20,8 @@ const server = app.listen(port, () => {
   console.log('[SERVER] 資料庫連接狀態 (來自 db.js): 已連接 (此處假設 db.js 中的連接成功)'); // 假設
 });
 console.log('[SERVER] app.listen 已調用');
-let isShuttingDown = false;
+const serverShutdownState = { inProgress: false };
+const shutdownOnUnhandledRejection = process.env.SHUTDOWN_ON_UNHANDLED_REJECTION === 'true';
 
 // 處理未捕獲的異常
 process.on('uncaughtException', (error) => {
@@ -32,6 +33,14 @@ process.on('uncaughtException', (error) => {
 // 處理未處理的 Promise 拒絕
 process.on('unhandledRejection', (reason) => {
   console.error('[SERVER] 未處理的 Promise 拒絕:', reason);
+  if (reason instanceof Error && reason.stack) {
+    console.error('[SERVER] Promise 拒絕堆疊:', reason.stack);
+  }
+  if (shutdownOnUnhandledRejection) {
+    console.error('[SERVER] 依設定關閉伺服器 (SHUTDOWN_ON_UNHANDLED_REJECTION=true)');
+    closeServerGracefully();
+    return;
+  }
   console.error('[SERVER] 已記錄未處理拒絕，伺服器將繼續運行');
 });
 
@@ -48,12 +57,12 @@ process.on('SIGINT', () => {
 
 // 優雅關閉伺服器的函數
 function closeServerGracefully() {
-  if (isShuttingDown) {
+  if (serverShutdownState.inProgress) {
     console.log('[SERVER] 已在關閉流程中，忽略重複關閉請求');
     return;
   }
 
-  isShuttingDown = true;
+  serverShutdownState.inProgress = true;
   console.log('[SERVER] 正在關閉伺服器...');
   server.close(() => {
     console.log('[SERVER] Express 伺服器已關閉');
