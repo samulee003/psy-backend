@@ -2,7 +2,7 @@ const axios = require('axios');
 
 const OPENCLAW_WEBHOOK_URL = 'https://samuclaw.zeabur.app/hooks/agent';
 const OPENCLAW_TOKEN = process.env.OPENCLAW_HOOKS_TOKEN;
-const WIFE_WHATSAPP = '+85365713250';
+const NOTIFY_WHATSAPP_NUMBER = process.env.OPENCLAW_NOTIFY_WHATSAPP;
 
 async function notifyAppointmentEvent(eventType, appointmentData) {
   if (!OPENCLAW_TOKEN) {
@@ -29,7 +29,7 @@ async function notifyAppointmentEvent(eventType, appointmentData) {
         name: '預約系統',
         deliver: true,
         channel: 'whatsapp',
-        to: WIFE_WHATSAPP,
+        to: NOTIFY_WHATSAPP_NUMBER,
       },
       {
         headers: {
