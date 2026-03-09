@@ -191,6 +191,8 @@ const createAppointment = (db) => (req, res) => {
                 time,
                 isNewPatient: isNewPatientBool,
                 notes: note
+              }).catch((webhookError) => {
+                console.error('[預約日誌] 發送 created webhook 失敗:', webhookError.message);
               });
 
               res.status(201).json({
@@ -429,7 +431,13 @@ const updateAppointmentStatus = (db) => (req, res) => {
         }
         
         console.log(`[更新狀態日誌] 準備獲取更新後的預約 ${appointmentId}`);
-        db.get('SELECT * FROM appointments WHERE id = ?', [appointmentId], (err, updatedAppointment) => {
+        db.get(
+          `SELECT a.*, p.name as patient_name
+           FROM appointments a
+           LEFT JOIN users p ON a.patient_id = p.id
+           WHERE a.id = ?`,
+          [appointmentId],
+          (err, updatedAppointment) => {
           if (err) {
             console.error('[更新狀態日誌] 更新後獲取預約信息錯誤:', err.message);
             return res.status(200).json({ 
@@ -443,17 +451,15 @@ const updateAppointmentStatus = (db) => (req, res) => {
           console.log(`[更新狀態日誌] 成功獲取更新後的預約 ${appointmentId}:`, JSON.stringify(updatedAppointment));
 
           if (status === 'cancelled') {
-            db.get('SELECT name FROM users WHERE id = ?', [updatedAppointment.patient_id], (nameErr, patientRow) => {
-              if (nameErr) {
-                console.error('[更新狀態日誌] 查詢取消通知患者姓名失敗:', nameErr.message);
-              }
-              notifyAppointmentEvent('cancelled', {
-                patientName: patientRow && patientRow.name ? patientRow.name : `患者#${updatedAppointment.patient_id}`,
-                date: updatedAppointment.date,
-                time: updatedAppointment.time,
-                isNewPatient: updatedAppointment.isNewPatient,
-                notes: updatedAppointment.notes
-              });
+            const updatedIsNewPatient = updatedAppointment.isNewPatient ?? updatedAppointment.is_new_patient;
+            notifyAppointmentEvent('cancelled', {
+              patientName: updatedAppointment.patient_name || `患者#${updatedAppointment.patient_id}`,
+              date: updatedAppointment.date,
+              time: updatedAppointment.time,
+              isNewPatient: updatedIsNewPatient,
+              notes: updatedAppointment.notes
+            }).catch((webhookError) => {
+              console.error('[更新狀態日誌] 發送 cancelled webhook 失敗:', webhookError.message);
             });
           }
           
@@ -463,7 +469,8 @@ const updateAppointmentStatus = (db) => (req, res) => {
             message: '預約狀態已成功更新', 
             appointment: updatedAppointment 
           });
-        });
+          }
+        );
       });
     });
   } catch (error) {
