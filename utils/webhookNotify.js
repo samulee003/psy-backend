@@ -1,4 +1,5 @@
 const axios = require('axios');
+const WEBHOOK_TIMEOUT_MS = 10000;
 
 async function notifyAppointmentEvent(eventType, appointmentData) {
   const webhookUrl = process.env.OPENCLAW_WEBHOOK_URL;
@@ -36,7 +37,7 @@ async function notifyAppointmentEvent(eventType, appointmentData) {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${webhookToken}`
         },
-        timeout: 10000
+        timeout: WEBHOOK_TIMEOUT_MS
       }
     );
     console.log(`[Webhook] ${eventType} 通知已發送`);
