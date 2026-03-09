@@ -6,6 +6,7 @@ const dateUtils = require('../utils/dateUtils');
 const tzUtils = require('../utils/timezone');
 const validators = require('../utils/validators');
 const emailService = require('../utils/emailService');
+const { notifyAppointmentEvent } = require('../utils/webhookNotify');
 
 // 創建新預約
 const createAppointment = (db) => (req, res) => {
@@ -184,6 +185,14 @@ const createAppointment = (db) => (req, res) => {
               }
                 
               // 返回成功響應，包含預約 ID 和 isNewPatient 資訊
+              notifyAppointmentEvent('created', {
+                patientName: patient.name,
+                date,
+                time,
+                isNewPatient: isNewPatientBool,
+                notes: note
+              });
+
               res.status(201).json({
                 success: true,
                 appointment: {
@@ -432,6 +441,21 @@ const updateAppointmentStatus = (db) => (req, res) => {
           }
           
           console.log(`[更新狀態日誌] 成功獲取更新後的預約 ${appointmentId}:`, JSON.stringify(updatedAppointment));
+
+          if (status === 'cancelled') {
+            db.get('SELECT name FROM users WHERE id = ?', [updatedAppointment.patient_id], (nameErr, patientRow) => {
+              if (nameErr) {
+                console.error('[更新狀態日誌] 查詢取消通知患者姓名失敗:', nameErr.message);
+              }
+              notifyAppointmentEvent('cancelled', {
+                patientName: patientRow && patientRow.name ? patientRow.name : `患者#${updatedAppointment.patient_id}`,
+                date: updatedAppointment.date,
+                time: updatedAppointment.time,
+                isNewPatient: updatedAppointment.isNewPatient,
+                notes: updatedAppointment.notes
+              });
+            });
+          }
           
           // 返回成功響應
           res.json({ 
