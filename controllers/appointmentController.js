@@ -8,7 +8,7 @@ const validators = require('../utils/validators');
 const emailService = require('../utils/emailService');
 
 // 創建新預約
-const createAppointment = (db) => (req, res) => {
+const createAppointment = db => (req, res) => {
   console.log('[預約日誌] 進入 createAppointment 函數');
   try {
     // 使用集中式驗證
@@ -17,17 +17,17 @@ const createAppointment = (db) => (req, res) => {
       console.error('[預約日誌] 驗證錯誤:', validation.error);
       return res.status(400).json({ success: false, error: validation.error });
     }
-    
-    const { 
-      doctorId,          // 醫生ID
-      patientId,         // 患者ID
-      appointmentDate,   // 預約日期
-      timeSlot,          // 時間段
-      reason,            // 預約原因
-      notes,             // 備註
-      isNewPatient,      // 是否新患者
-      patientInfo,       // 患者信息
-      timezone           // 時區信息
+
+    const {
+      doctorId, // 醫生ID
+      patientId, // 患者ID
+      appointmentDate, // 預約日期
+      timeSlot, // 時間段
+      reason, // 預約原因
+      notes, // 備註
+      isNewPatient, // 是否新患者
+      patientInfo, // 患者信息
+      timezone, // 時區信息
     } = req.body;
 
     // 後端內部變數映射
@@ -35,7 +35,7 @@ const createAppointment = (db) => (req, res) => {
     const time = timeSlot;
     const note = reason || notes || '';
     const clientTimezone = timezone || 'Asia/Hong_Kong';
-    
+
     // 處理 isNewPatient 布林值
     let isNewPatientBool = false;
     if (typeof isNewPatient === 'boolean') {
@@ -44,7 +44,7 @@ const createAppointment = (db) => (req, res) => {
       // 如果前端發送字串，轉換為布林值
       isNewPatientBool = isNewPatient === 'true' || isNewPatient === 'yes';
     }
-    
+
     console.log('[預約日誌] 收到的請求體 req.body:', req.body);
     console.log('[預約日誌] 當前登入用戶 req.user:', req.user);
     console.log('[預約日誌] 使用時區:', clientTimezone);
@@ -84,9 +84,19 @@ const createAppointment = (db) => (req, res) => {
         }
 
         // 如果當前用戶是患者，則只能以自己的身份預約
-        console.log('[預約日誌] 檢查患者身份，當前用戶角色:', req.user.role, '用戶ID:', req.user.id, '請求的patientId:', patientId);
+        console.log(
+          '[預約日誌] 檢查患者身份，當前用戶角色:',
+          req.user.role,
+          '用戶ID:',
+          req.user.id,
+          '請求的patientId:',
+          patientId
+        );
         if (req.user.role === 'patient' && req.user.id !== parseInt(patientId)) {
-          console.warn('[預約日誌] 警告：患者只能以自己的身份預約', { userId: req.user.id, requestedPatientId: patientId });
+          console.warn('[預約日誌] 警告：患者只能以自己的身份預約', {
+            userId: req.user.id,
+            requestedPatientId: patientId,
+          });
           return res.status(403).json({ success: false, error: '患者只能以自己的身份預約' });
         }
 
@@ -119,7 +129,7 @@ const createAppointment = (db) => (req, res) => {
               // 如果不是有效的 JSON，將其作為姓名
               patientInfoJson = JSON.stringify({
                 patientName: patientInfo,
-                isActualPatient: true
+                isActualPatient: true,
               });
             }
             console.log('[預約日誌] 處理就診者資訊字串:', patientInfo);
@@ -131,75 +141,83 @@ const createAppointment = (db) => (req, res) => {
               doctor_id, patient_id, date, time, notes, status, patient_info, isNewPatient, created_at
             ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
           `;
-          const params = [doctorId, patientId, date, time, note, 'confirmed', patientInfoJson, isNewPatientBool];
+          const params = [
+            doctorId,
+            patientId,
+            date,
+            time,
+            note,
+            'confirmed',
+            patientInfoJson,
+            isNewPatientBool,
+          ];
           console.log('[預約日誌] 準備執行創建預約SQL:', createQuery, '參數:', params);
 
-          db.run(
-            createQuery,
-            params,
-            function(err) {
-              if (err) {
-                console.error('[預約日誌] 創建預約SQL錯誤:', err.message);
-                return res.status(500).json({ success: false, error: '無法創建預約' });
-              }
-              console.log('[預約日誌] 創建預約成功，影響行數:', this.changes, '最後插入ID:', this.lastID);
-              console.log('[預約日誌] isNewPatient 儲存值:', isNewPatientBool);
-              
-              const newAppointmentId = this.lastID;
+          db.run(createQuery, params, function (err) {
+            if (err) {
+              console.error('[預約日誌] 創建預約SQL錯誤:', err.message);
+              return res.status(500).json({ success: false, error: '無法創建預約' });
+            }
+            console.log(
+              '[預約日誌] 創建預約成功，影響行數:',
+              this.changes,
+              '最後插入ID:',
+              this.lastID
+            );
+            console.log('[預約日誌] isNewPatient 儲存值:', isNewPatientBool);
 
-              // 發送預約通知郵件給醫生
-              try {
-                emailService.sendAppointmentNotificationToDoctor(
-                  doctor,
-                  patient,
-                  {
-                    id: newAppointmentId,
-                    date: date,
-                    time: time,
-                    notes: note
-                  }
-                ).then(emailSent => {
+            const newAppointmentId = this.lastID;
+
+            // 發送預約通知郵件給醫生
+            try {
+              emailService
+                .sendAppointmentNotificationToDoctor(doctor, patient, {
+                  id: newAppointmentId,
+                  date: date,
+                  time: time,
+                  notes: note,
+                })
+                .then(emailSent => {
                   console.log(`[預約日誌] 醫生預約通知郵件${emailSent ? '已發送' : '發送失敗'}`);
-                }).catch(err => {
+                })
+                .catch(err => {
                   console.error('[預約日誌] 發送醫生通知郵件錯誤:', err);
                 });
 
-                // 發送預約確認郵件給患者
-                emailService.sendAppointmentConfirmationToPatient(
-                  patient,
-                  doctor,
-                  {
-                    id: newAppointmentId,
-                    date: date,
-                    time: time,
-                    notes: note
-                  }
-                ).then(emailSent => {
-                  console.log(`[預約日誌] 患者預約確認郵件${emailSent ? '已發送' : '發送失敗'}`);
-                }).catch(err => {
-                  console.error('[預約日誌] 發送患者確認郵件錯誤:', err);
-                });
-              } catch (emailError) {
-                console.error('[預約日誌] 郵件服務錯誤:', emailError);
-              }
-                
-              // 返回成功響應，包含預約 ID 和 isNewPatient 資訊
-              res.status(201).json({
-                success: true,
-                appointment: {
+              // 發送預約確認郵件給患者
+              emailService
+                .sendAppointmentConfirmationToPatient(patient, doctor, {
                   id: newAppointmentId,
-                  doctorId,
-                  patientId,
                   date: date,
                   time: time,
-                  status: 'confirmed',
                   notes: note,
-                  isNewPatient: isNewPatientBool
-                },
-                message: '預約創建成功'
-              });
+                })
+                .then(emailSent => {
+                  console.log(`[預約日誌] 患者預約確認郵件${emailSent ? '已發送' : '發送失敗'}`);
+                })
+                .catch(err => {
+                  console.error('[預約日誌] 發送患者確認郵件錯誤:', err);
+                });
+            } catch (emailError) {
+              console.error('[預約日誌] 郵件服務錯誤:', emailError);
             }
-          );
+
+            // 返回成功響應，包含預約 ID 和 isNewPatient 資訊
+            res.status(201).json({
+              success: true,
+              appointment: {
+                id: newAppointmentId,
+                doctorId,
+                patientId,
+                date: date,
+                time: time,
+                status: 'confirmed',
+                notes: note,
+                isNewPatient: isNewPatientBool,
+              },
+              message: '預約創建成功',
+            });
+          });
         });
       });
     });
@@ -208,13 +226,13 @@ const createAppointment = (db) => (req, res) => {
     res.status(500).json({
       success: false,
       error: '創建預約時發生未知錯誤',
-      details: process.env.NODE_ENV === 'development' ? error.message : undefined
+      details: process.env.NODE_ENV === 'development' ? error.message : undefined,
     });
   }
 };
 
 // 獲取預約列表
-const getAppointments = (db) => (req, res) => {
+const getAppointments = db => (req, res) => {
   try {
     const { doctorId, patientId, status, date } = req.query;
     let query = `
@@ -268,13 +286,13 @@ const getAppointments = (db) => (req, res) => {
         console.error('獲取預約列表錯誤:', err.message);
         return res.status(500).json({ error: '無法獲取預約列表' });
       }
-      
+
       const processedAppointments = appointments.map(app => {
         const { patient_name, doctor_name, patient_info, ...rest } = app;
-        
+
         // 處理就診者姓名顯示邏輯
         let displayPatientName = patient_name; // 預設使用預約人姓名
-        
+
         if (patient_info) {
           try {
             const patientInfoObj = JSON.parse(patient_info);
@@ -285,24 +303,25 @@ const getAppointments = (db) => (req, res) => {
             console.warn('解析 patient_info 失敗:', e.message);
           }
         }
-        
+
         // 確保 isNewPatient 欄位被正確處理
         let isNewPatientValue = false;
         if (app.isNewPatient !== undefined && app.isNewPatient !== null) {
           // 處理 SQLite 中的布林值（可能是 0/1 或 true/false）
-          isNewPatientValue = app.isNewPatient === 1 || app.isNewPatient === true || app.isNewPatient === 'true';
+          isNewPatientValue =
+            app.isNewPatient === 1 || app.isNewPatient === true || app.isNewPatient === 'true';
         }
-        
+
         return {
           ...rest,
           patientName: displayPatientName,
           doctorName: doctor_name,
           actualPatientName: displayPatientName, // 新增欄位，明確表示就診者姓名
           bookerName: patient_name, // 新增欄位，表示預約人姓名
-          isNewPatient: isNewPatientValue // 確保 isNewPatient 欄位被包含
+          isNewPatient: isNewPatientValue, // 確保 isNewPatient 欄位被包含
         };
       });
-      
+
       res.json({ success: true, appointments: processedAppointments });
     });
   } catch (error) {
@@ -312,7 +331,7 @@ const getAppointments = (db) => (req, res) => {
 };
 
 // 獲取單個預約信息
-const getAppointmentById = (db) => (req, res) => {
+const getAppointmentById = db => (req, res) => {
   try {
     const { appointmentId } = req.params;
 
@@ -338,8 +357,8 @@ const getAppointmentById = (db) => (req, res) => {
 
       // 檢查用戶是否有權限查看此預約
       if (
-        req.user.role === 'doctor' && req.user.id !== appointment.doctor_id ||
-        req.user.role === 'patient' && req.user.id !== appointment.patient_id
+        (req.user.role === 'doctor' && req.user.id !== appointment.doctor_id) ||
+        (req.user.role === 'patient' && req.user.id !== appointment.patient_id)
       ) {
         return res.status(403).json({ error: '無權訪問此預約' });
       }
@@ -353,8 +372,10 @@ const getAppointmentById = (db) => (req, res) => {
 };
 
 // 更新預約狀態
-const updateAppointmentStatus = (db) => (req, res) => {
-  console.log(`[更新狀態日誌] 進入 updateAppointmentStatus 函數 - appointmentId: ${req.params.appointmentId}, user: ${JSON.stringify(req.user)}, body: ${JSON.stringify(req.body)}`);
+const updateAppointmentStatus = db => (req, res) => {
+  console.log(
+    `[更新狀態日誌] 進入 updateAppointmentStatus 函數 - appointmentId: ${req.params.appointmentId}, user: ${JSON.stringify(req.user)}, body: ${JSON.stringify(req.body)}`
+  );
   try {
     const { appointmentId } = req.params;
     const { status, note } = req.body;
@@ -379,23 +400,29 @@ const updateAppointmentStatus = (db) => (req, res) => {
         console.log(`[更新狀態日誌] 預約 ${appointmentId} 不存在`);
         return res.status(404).json({ error: '預約不存在' });
       }
-      
+
       console.log(`[更新狀態日誌] 找到預約 ${appointmentId}:`, JSON.stringify(appointment));
       console.log(`[更新狀態日誌] 當前用戶:`, JSON.stringify(req.user));
       console.log(`[更新狀態日誌] 請求的狀態: ${status}`);
 
       // 權限檢查
       if (req.user.role === 'patient' && req.user.id !== appointment.patient_id) {
-        console.warn(`[更新狀態日誌][權限警告] 患者 ${req.user.id} 嘗試修改他人預約 ${appointmentId}`);
+        console.warn(
+          `[更新狀態日誌][權限警告] 患者 ${req.user.id} 嘗試修改他人預約 ${appointmentId}`
+        );
         return res.status(403).json({ error: '患者無權修改他人預約' });
       }
-      
+
       if (req.user.role === 'doctor' && appointment.doctor_id !== req.user.id) {
-        console.warn(`[更新狀態日誌][權限警告] 醫生 ${req.user.id} 嘗試修改不屬於自己的預約 ${appointmentId} (原醫生ID: ${appointment.doctor_id})`);
+        console.warn(
+          `[更新狀態日誌][權限警告] 醫生 ${req.user.id} 嘗試修改不屬於自己的預約 ${appointmentId} (原醫生ID: ${appointment.doctor_id})`
+        );
         return res.status(403).json({ error: '醫生無權修改不屬於自己的預約' });
       }
-      
-      console.log(`[更新狀態日誌] 權限檢查通過 (用戶 ${req.user.id} / 角色 ${req.user.role})，準備更新預約 ${appointmentId} 的狀態為 ${status}`);
+
+      console.log(
+        `[更新狀態日誌] 權限檢查通過 (用戶 ${req.user.id} / 角色 ${req.user.role})，準備更新預約 ${appointmentId} 的狀態為 ${status}`
+      );
 
       // 更新預約狀態
       const updateQuery = `
@@ -403,43 +430,50 @@ const updateAppointmentStatus = (db) => (req, res) => {
         SET status = ?, notes = ?, updated_at = datetime('now')
         WHERE id = ?
       `;
-      const params = [status, note || appointment.notes, appointmentId]; 
+      const params = [status, note || appointment.notes, appointmentId];
       console.log('[更新狀態日誌] 準備執行更新SQL:', updateQuery, '參數:', JSON.stringify(params));
 
-      db.run(updateQuery, params, function(err) {
+      db.run(updateQuery, params, function (err) {
         if (err) {
           console.error('[更新狀態日誌] 更新預約狀態SQL錯誤:', err.message);
           return res.status(500).json({ error: '無法更新預約狀態' });
         }
-        
+
         console.log(`[更新狀態日誌] 更新成功，影響行數: ${this.changes}`);
 
         if (this.changes === 0) {
           console.warn(`[更新狀態日誌] 預約 ${appointmentId} 未被更新 (可能狀態未改變或ID不存在)`);
           return res.status(404).json({ error: '預約不存在或狀態未改變' });
         }
-        
+
         console.log(`[更新狀態日誌] 準備獲取更新後的預約 ${appointmentId}`);
-        db.get('SELECT * FROM appointments WHERE id = ?', [appointmentId], (err, updatedAppointment) => {
-          if (err) {
-            console.error('[更新狀態日誌] 更新後獲取預約信息錯誤:', err.message);
-            return res.status(200).json({ 
-              success: true, 
-              message: '預約狀態已更新，但獲取最新信息失敗',
-              appointmentId: appointmentId,
-              status: status 
+        db.get(
+          'SELECT * FROM appointments WHERE id = ?',
+          [appointmentId],
+          (err, updatedAppointment) => {
+            if (err) {
+              console.error('[更新狀態日誌] 更新後獲取預約信息錯誤:', err.message);
+              return res.status(200).json({
+                success: true,
+                message: '預約狀態已更新，但獲取最新信息失敗',
+                appointmentId: appointmentId,
+                status: status,
+              });
+            }
+
+            console.log(
+              `[更新狀態日誌] 成功獲取更新後的預約 ${appointmentId}:`,
+              JSON.stringify(updatedAppointment)
+            );
+
+            // 返回成功響應
+            res.json({
+              success: true,
+              message: '預約狀態已成功更新',
+              appointment: updatedAppointment,
             });
           }
-          
-          console.log(`[更新狀態日誌] 成功獲取更新後的預約 ${appointmentId}:`, JSON.stringify(updatedAppointment));
-          
-          // 返回成功響應
-          res.json({ 
-            success: true, 
-            message: '預約狀態已成功更新', 
-            appointment: updatedAppointment 
-          });
-        });
+        );
       });
     });
   } catch (error) {
@@ -449,7 +483,7 @@ const updateAppointmentStatus = (db) => (req, res) => {
 };
 
 // 刪除預約
-const deleteAppointment = (db) => (req, res) => {
+const deleteAppointment = db => (req, res) => {
   try {
     const { appointmentId } = req.params;
 
@@ -473,7 +507,7 @@ const deleteAppointment = (db) => (req, res) => {
       }
 
       // 刪除預約
-      db.run('DELETE FROM appointments WHERE id = ?', [appointmentId], function(err) {
+      db.run('DELETE FROM appointments WHERE id = ?', [appointmentId], function (err) {
         if (err) {
           console.error('刪除預約錯誤:', err.message);
           return res.status(500).json({ error: '無法刪除預約' });
@@ -489,7 +523,7 @@ const deleteAppointment = (db) => (req, res) => {
 };
 
 // 新增：獲取「我的」預約
-const getMyAppointments = (db) => (req, res) => {
+const getMyAppointments = db => (req, res) => {
   try {
     const userId = req.user.id;
     const userRole = req.user.role;
@@ -526,14 +560,14 @@ const getMyAppointments = (db) => (req, res) => {
         console.error('獲取我的預約列表錯誤:', err.message);
         return res.status(500).json({ error: '無法獲取預約列表' });
       }
-      
+
       // 更新：同時處理 patient_name 到 patientName 和 doctor_name 到 doctorName 的映射
       const processedAppointments = appointments.map(app => {
         const { patient_name, doctor_name, patient_info, ...rest } = app;
-        
+
         // 處理就診者姓名顯示邏輯
         let displayPatientName = patient_name; // 預設使用預約人姓名
-        
+
         if (patient_info) {
           try {
             const patientInfoObj = JSON.parse(patient_info);
@@ -544,24 +578,25 @@ const getMyAppointments = (db) => (req, res) => {
             console.warn('解析 patient_info 失敗:', e.message);
           }
         }
-        
+
         // 確保 isNewPatient 欄位被正確處理
         let isNewPatientValue = false;
         if (app.isNewPatient !== undefined && app.isNewPatient !== null) {
           // 處理 SQLite 中的布林值（可能是 0/1 或 true/false）
-          isNewPatientValue = app.isNewPatient === 1 || app.isNewPatient === true || app.isNewPatient === 'true';
+          isNewPatientValue =
+            app.isNewPatient === 1 || app.isNewPatient === true || app.isNewPatient === 'true';
         }
-        
+
         return {
           ...rest,
           patientName: displayPatientName,
           doctorName: doctor_name,
           actualPatientName: displayPatientName, // 新增欄位，明確表示就診者姓名
           bookerName: patient_name, // 新增欄位，表示預約人姓名
-          isNewPatient: isNewPatientValue // 確保 isNewPatient 欄位被包含
+          isNewPatient: isNewPatientValue, // 確保 isNewPatient 欄位被包含
         };
       });
-      
+
       // 返回 success: true 以匹配前端期望的格式，並使用處理過的預約列表
       res.json({ success: true, appointments: processedAppointments });
     });
@@ -571,11 +606,11 @@ const getMyAppointments = (db) => (req, res) => {
   }
 };
 
-module.exports = (db) => ({
+module.exports = db => ({
   createAppointment: createAppointment(db),
   getAppointments: getAppointments(db),
   getAppointmentById: getAppointmentById(db),
   updateAppointmentStatus: updateAppointmentStatus(db),
   deleteAppointment: deleteAppointment(db),
-  getMyAppointments: getMyAppointments(db)
-}); 
+  getMyAppointments: getMyAppointments(db),
+});
